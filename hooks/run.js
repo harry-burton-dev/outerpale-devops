@@ -129,6 +129,15 @@ async function promptSubmit(input, cfg, root) {
     st.touched.push(st.issue);
     ctx.push(`outerpale-devops: this thread (a fork or resumed copy) is on ${st.issue}. Post this thread's link as a comment on ${st.issue} in Linear unless it is already there.`);
   }
+  // An unfiled thread in a project named for an epic ("E03") is on that epic, so the question isn't needed.
+  if (!st.epic && !st.noEpic) {
+    const pe = C.projectEpic(input.prompt, reg);
+    if (pe) {
+      st.epic = pe;
+      note(st, 'epic-from-project', { epic: pe });
+      ctx.push(`outerpale-devops: this thread is on epic ${pe}, taken from the project's name. Run start-issue for the issue you work on. Name another epic or say "no epic" to change it.`);
+    }
+  }
   // The description comes only from the person's words; a placeholder is never saved.
   if (!st.desc && human) st.desc = C.describe(prompt, reg);
 

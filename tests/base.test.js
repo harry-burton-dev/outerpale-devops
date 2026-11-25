@@ -71,10 +71,10 @@ test('a Claude Doc is held to the schema whatever the connector is called', () =
   }
 });
 
-test('the plugin is outerpale-devops 0.4.1, keeps linear-link\'s state folder, and has a Stop hook', () => {
+test('the plugin is outerpale-devops 0.4.2, keeps linear-link\'s state folder, and has a Stop hook', () => {
   const m = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8'));
   assert.equal(m.name, 'outerpale-devops');
-  assert.equal(m.version, '0.4.1');
+  assert.equal(m.version, '0.4.2');
   const hooks = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'hooks', 'hooks.json'), 'utf8')).hooks;
   assert.ok(hooks.Stop, 'a Stop hook is wired');
   const root = project();

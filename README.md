@@ -10,7 +10,7 @@ A Claude Code plugin for Outer-Pale dev-ops. It ties a project's threads, artifa
 | Epic question | On the first prompt of an unfiled thread, Claude judges whether it is Outer-Pale engineering and asks one question: use an epic, open a new epic, "No epic" or "Not Outer-Pale work". Writes wait for the answer, which is read from the transcript (the desktop app doesn't run PostToolUse for `AskUserQuestion`) | UserPromptSubmit, PreToolUse, PostToolUse |
 | Not Outer-Pale | "not Outer-Pale" (answered, or typed at the start of a prompt) stands the plugin aside: no titles, no folder rules. A folder with no `epics/` or `masters/` has no folder rules either | UserPromptSubmit, PreToolUse and PostToolUse hooks |
 | Linear workspace | Writes only to Outer-Pale, whatever the policy or scope | PreToolUse on Linear write tools, PostToolUse on `get_workspace` |
-| Current epic and issue | Taken from the message (`FE OUT-401 …`, "switch to OUT-402") or the start-issue skill. A passing mention ("blocked by OUT-82") doesn't switch. The epic must exist in this tree | UserPromptSubmit hook, state in `.linear-link/sessions/` |
+| Current epic and issue | Taken from the message (`FE OUT-401 …`, "switch to OUT-402"), the start-issue skill, or the Claude project's name when it leads with an epic code (`E03`), which skips the epic question. A passing mention ("blocked by OUT-82") doesn't switch. The epic must exist in this tree | UserPromptSubmit hook, state in `.linear-link/sessions/` |
 | Thread ↔ issue log | Each issue a thread starts gets a "Thread started" comment | Hook prompts Claude, which posts with the Linear connector |
 | Documents | `.md`/`.html` only in `masters/`, the current epic's folder, or `unfiled/` for a "no epic" thread | PreToolUse hook refuses other writes |
 | Temporary outputs | `.md` in `epics/<E>-…/notes/` or an issue folder, listed in the epic's `index.md` when written | PreToolUse and PostToolUse hooks |
@@ -38,7 +38,7 @@ archive/epics/…     closed epics
 
 ## Where the tree is
 
-The nearest folder at or above the session's folder that holds `epics/` or `masters/`. So a session in `Augur/code/augur-kit` is held to `Augur/`'s tree. Files outside the tree are never policed. Neither is a git repo cloned inside the tree, such as `Augur/code/augur`: it keeps its own documents, and `sweep` skips it. The `root` option overrides this. A project not yet moved into a repo falls back to the Claude project's shared folder (`/mnt/project-files`), then to the session's folder.
+The nearest folder at or above the session's folder that holds `epics/` or `masters/`; failing that, the one folder directly below it that does (a cloud session in `/home/user` finds `/home/user/<repo>`). So a session in `Augur/code/augur-kit` is held to `Augur/`'s tree. Files outside the tree are never policed. Neither is a git repo cloned inside the tree, such as `Augur/code/augur`: it keeps its own documents, and `sweep` skips it. The `root` option overrides this. A project not yet moved into a repo falls back to the Claude project's shared folder (`/mnt/project-files`), then to the session's folder.
 
 ## Install
 
