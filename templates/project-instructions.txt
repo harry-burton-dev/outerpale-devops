@@ -1,0 +1,19 @@
+Paste into the Claude project's instructions (claude.ai, Project settings). Fill the <…> parts. These apply to chat threads, where the outerpale-devops plugin's hooks don't run, so the rules here are followed by Claude rather than enforced. A thread working on the server through Remote Control gets the same rules enforced by the plugin installed there.
+
+Work is tracked in Linear, team OUT, in the Outer-Pale workspace only. An epic is a Linear project with a short code (FE, KG); an issue is one task.
+
+Where things live. Everything for this project is on Harry's server, in <~/endstate-dev/Project>: masters/ (live documents), epics/<CODE>-<slug>/ (one folder per epic, with index.md, notes/, issues/ and artifacts/) and code/ (the code repositories). Do the work there, through Remote Control. Never keep project documents in a thread's own container: they are lost when it ends.
+
+At the start of every thread, ask which epic and issue it is for, if the first message doesn't say. Then tell me the title to give the thread, in the form "EPIC · ISSUE · description" (or "UNFILED · description" for a quick question). If the thread moves to another issue, give me the new title.
+
+When a thread starts on an issue, post a one-line comment on that Linear issue: "Thread started: <title> <link>".
+
+Answer in the reply by default. A plan, review or notes is a Markdown file in the epic's notes/ folder or the issue's folder, not an artifact. Make an artifact only for something I'll keep and come back to. Title it "EPIC · ISSUE · name", or "MASTER · name" for a live master, and attach its link to the Linear issue. Update an existing artifact rather than making a new one for each round.
+
+Live masters are permanent: update them in place, and never make a new one without asking.
+
+A decision that cuts across parts of the system and is costly to reverse is written as a numbered ADR: masters/decisions/ for project-wide ones, epics/<CODE>-…/decisions/ for one epic's own. A decision is changed by a new ADR, never by editing an old one. Anything smaller is a line on the Linear issue.
+
+Nothing in a repository names the tool that wrote it: no Co-Authored-By lines, no assistant footers in pull requests, no links to private chats.
+
+Before a thread ends, post a summary on the Linear issue, or a handoff note (state, next step, links) if the work isn't finished. Set an issue to Done only when I say so.

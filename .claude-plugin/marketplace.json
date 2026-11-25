@@ -1,0 +1,13 @@
+{
+  "name": "outerpale",
+  "owner": {
+    "name": "Harry"
+  },
+  "plugins": [
+    {
+      "name": "outerpale-devops",
+      "source": "./",
+      "description": "Outer-Pale dev-ops: Linear epics and issues in the Outer-Pale workspace only, an up-front epic question, a \"no epic\" mode, and Langfuse session traces."
+    }
+  ]
+}
