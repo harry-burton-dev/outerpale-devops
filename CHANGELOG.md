@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- **The Linear guard fails closed.** If the PreToolUse hook throws, a Linear write (`save_*`, `create_*`, `delete_*`, …) is refused with the error in the reason, where before the hook exited 0 and the write went through unchecked. Other tools and Linear reads still pass on an error.
+- **Guard first.** The workspace check runs before any session-state work, so a failure there can't skip it.
+
 ## 0.4.0
 
 - **Epic answer read from the transcript.** The desktop app doesn't run PostToolUse for `AskUserQuestion`, so 0.3.0 never saw the answer and kept refusing writes. While the question is open, the PreToolUse and UserPromptSubmit hooks now read the latest answer from the session transcript.

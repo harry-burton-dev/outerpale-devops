@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // outerpale-devops hook dispatcher: node run.js <session-start|prompt-submit|pre-tool|post-tool|stop>
 // Reads the hook input as JSON on stdin and prints the hook's JSON output.
-// Any internal error fails open: the hook prints nothing and exits 0.
+// Any internal error fails open (prints nothing, exits 0), except before a Linear write, which it refuses.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -166,22 +166,28 @@ function htmlTitle(file) {
 }
 
 async function preTool(input, cfg, root) {
+  const name = input.tool_name;
+  // Linear writes go to the configured workspace only. Never softened by the unfiled policy.
+  // Checked before any state work, so a failure there can't skip it.
+  const guard = W.check(name, cfg);
+  if (guard) {
+    try {
+      const gst = C.loadState(root, input.session_id);
+      note(gst, guard.event.name, guard.event);
+      C.saveState(root, input.session_id, gst);
+    } catch (err) {
+      process.stderr.write(`outerpale-devops: couldn't record the Linear refusal: ${err.message}\n`);
+    }
+    return deny(guard.reason);
+  }
+
   const st = C.loadState(root, input.session_id);
   const ti = input.tool_input || {};
   const soft = cfg.policy === 'unfiled';
   const refuse = r => (soft ? warn(r) : deny(r));
-  const name = input.tool_name;
   const reg0 = C.epics(root);
   if (C.reconcile(st, reg0)) C.saveState(root, input.session_id, st);
   if (C.awaitingScope(st) && applyAnswer(st, C.answerFromTranscript(input.transcript_path, st.askedAt || 0), reg0, cfg)) C.saveState(root, input.session_id, st);
-
-  // Linear writes go to the configured workspace only. Never softened by the unfiled policy.
-  const guard = W.check(name, cfg);
-  if (guard) {
-    note(st, guard.event.name, guard.event);
-    C.saveState(root, input.session_id, st);
-    return deny(guard.reason);
-  }
   if (st.outOfScope) return null;
   const publishing = name !== 'Artifact' || ((ti.action || 'publish') === 'publish' && !ti.asset);
   if (C.awaitingScope(st) && publishing && /^(Write|Edit|MultiEdit|NotebookEdit|Artifact)$|^mcp__.+__batch$/.test(name)) {
@@ -340,10 +346,12 @@ async function stop(input, cfg, root) {
   return null;
 }
 
-async function main() {
+async function main(state) {
   const event = process.argv[2];
+  state.event = event;
   let raw = '';
   for await (const chunk of process.stdin) raw += chunk;
+  state.raw = raw;
   const input = raw ? JSON.parse(raw) : {};
   const cfg = C.config();
   const root = C.projectDir(input);
@@ -352,7 +360,18 @@ async function main() {
   out(await fn(input, cfg, root));
 }
 
+// On an error the hook fails open, except that a Linear write is refused (fails closed).
+// The tool name is read from the raw input, so input that won't parse is still judged.
+function onError(state, err, done) {
+  const msg = (err && err.message) || String(err);
+  process.stderr.write(`outerpale-devops: ${msg}\n`);
+  const tool = (String(state.raw || '').match(/"tool_name"\s*:\s*"([^"]+)"/) || [])[1];
+  if (state.event !== 'pre-tool' || !W.isLinearWrite(tool)) return done();
+  process.stdout.write(JSON.stringify(deny(`the hook failed (${msg}), so this Linear write is refused: the workspace guard couldn't be trusted to run. Fix the error and try again.`)), done);
+}
+
 if (require.main === module) {
-  main().catch(err => { process.stderr.write(`outerpale-devops: ${err.message}\n`); process.exit(0); });
+  const state = {};
+  main(state).catch(err => onError(state, err, () => process.exit(0)));  // exit once the refusal is written
 }
 module.exports = { sessionStart, promptSubmit, preTool, postTool, stop };

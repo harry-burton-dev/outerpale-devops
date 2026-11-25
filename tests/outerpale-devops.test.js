@@ -96,6 +96,48 @@ test('guard: the unfiled policy does not soften it, and other connectors are lef
   assert.ok(covers('PostToolUse', `${LINEAR}__get_workspace`));
 });
 
+// A session whose state can be read but not saved: the hook throws on its first save.
+function unsavable(root, sid) {
+  const f = path.join(root, '.linear-link', 'sessions', `${sid}.json`);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify({ epic: 'ZZ' }));   // an epic that's gone, so reconcile saves
+  fs.chmodSync(f, 0o444);
+}
+
+test('guard: a hook error refuses Linear writes and names the error', () => {
+  const root = project(); const home = tmp();
+  hook('post-tool', { session_id: 'e1', cwd: root, tool_name: `${LINEAR}__get_workspace`, tool_input: {}, tool_response: wsResponse(OUTERPALE, 'Outer-Pale', 'outer-pale') }, home);
+  unsavable(root, 'e1');
+  const r = hook('pre-tool', { session_id: 'e1', cwd: root, tool_name: `${LINEAR}__save_issue`, tool_input: {} }, home);
+  assert.equal(hso(r).permissionDecision, 'deny');
+  assert.match(hso(r).permissionDecisionReason, /hook failed \(.*E(PERM|ACCES).*\)/);
+});
+
+test('guard: a hook error still lets non-Linear tools and Linear reads through', () => {
+  const root = project(); const home = tmp();
+  unsavable(root, 'e2');
+  for (const t of ['Read', 'mcp__gmail__delete_draft', `${LINEAR}__get_issue`]) {
+    assert.equal(hook('pre-tool', { session_id: 'e2', cwd: root, tool_name: t, tool_input: {} }, home), null, t);
+  }
+});
+
+test('guard: input that will not parse still refuses a Linear write, and nothing else', () => {
+  const run = raw => execFileSync('node', [RUN, 'pre-tool'], { input: raw, env: env(tmp()) }).toString();
+  const r = JSON.parse(run(`{"tool_name":"${LINEAR}__save_issue","tool_input":`));
+  assert.equal(hso(r).permissionDecision, 'deny');
+  assert.match(hso(r).permissionDecisionReason, /hook failed/);
+  assert.equal(run('{"tool_name":"Read","tool_input":'), '');
+  assert.equal(run('null'), '');
+});
+
+test('guard: the workspace check runs before state work, so an unchecked connector gets its own refusal', () => {
+  const root = project(); const home = tmp();
+  unsavable(root, 'e3');
+  const r = hook('pre-tool', { session_id: 'e3', cwd: root, tool_name: `${LINEAR}__save_issue`, tool_input: {} }, home);
+  assert.equal(hso(r).permissionDecision, 'deny');
+  assert.match(hso(r).permissionDecisionReason, /get_workspace first/);
+});
+
 // ---------- "no epic" ----------
 test('no epic: saying so lifts the block, and outputs go to unfiled/', () => {
   const root = project(); const home = tmp();
