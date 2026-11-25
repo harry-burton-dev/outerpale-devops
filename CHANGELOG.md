@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2
+
+- **Project default "no epic".** A root with `.linear-link/project.json` containing `{"noEpic": true}` starts every new thread as "no epic": the epic question isn't asked, writes don't wait, and documents go in `unfiled/`. Threads that already decided keep their state, naming an epic or issue still files a thread, and "not Outer-Pale" still stands the plugin aside. Roots without the file are asked as before.
+
 ## 0.4.1
 
 - **The Linear guard fails closed.** If the PreToolUse hook throws, a Linear write (`save_*`, `create_*`, `delete_*`, …) is refused with the error in the reason, where before the hook exited 0 and the write went through unchecked. Other tools and Linear reads still pass on an error.

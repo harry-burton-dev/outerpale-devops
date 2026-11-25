@@ -195,3 +195,30 @@ test('promptText: bracketed harness prefixes, bare slash commands and unterminat
   assert.strictEqual(C.promptText('/outerpale-devops:sweep'), '');
   assert.match(C.promptText('FE explain how <system-reminder> tags get parsed for OUT-12'), /OUT-12/);
 });
+
+// ---------- project default: "no epic" for every new thread ----------
+test('a project.json noEpic default skips the question for new threads', () => {
+  const dir = project();
+  fs.writeFileSync(path.join(dir, '.linear-link', 'project.json'), JSON.stringify({ noEpic: true }));
+  const s = hook('session-start', { session_id: 'd1', cwd: dir });
+  assert.match(hso(s).additionalContext, /working without an epic/);
+  const r = hook('prompt-submit', { session_id: 'd1', cwd: dir, prompt: 'write the ops store spec' });
+  assert.doesNotMatch(hso(r).additionalContext || '', /AskUserQuestion/);
+  assert.strictEqual(state(dir, 'd1').noEpic, true);
+  const w = hook('pre-tool', { session_id: 'd1', cwd: dir, tool_name: 'Write', tool_input: { file_path: path.join(dir, 'unfiled', 'notes.md') } });
+  assert.notStrictEqual(hso(w).permissionDecision, 'deny');
+});
+
+test('the default never overrides a thread that already decided, and naming an epic still files it', () => {
+  const root = project();
+  fs.writeFileSync(path.join(root, '.linear-link', 'project.json'), JSON.stringify({ noEpic: true }));
+  hook('prompt-submit', { session_id: 'd2', cwd: root, prompt: 'FE OUT-401 start the nav rail' });
+  assert.strictEqual(state(root, 'd2').epic, 'FE');
+  assert.strictEqual(state(root, 'd2').noEpic, false);
+});
+
+test('without project.json new threads are still asked', () => {
+  const root = project();
+  const r = hook('prompt-submit', { session_id: 'd3', cwd: root, prompt: 'fix the login page' });
+  assert.match(hso(r).additionalContext, /AskUserQuestion/);
+});

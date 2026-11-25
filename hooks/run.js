@@ -61,6 +61,7 @@ async function sessionStart(input, cfg, root) {
     st.epic = t0.groups.epic; st.issue = t0.groups.issue || null; st.desc = t0.groups.desc;
     C.saveState(root, input.session_id, st);
   }
+  if (!st.epic && st.noEpic && !st.outOfScope) ctx.push('This thread is working without an epic. Write documents in unfiled/ and title artifacts "UNFILED · …". Name an epic at any time to file the thread.');
   if (st.epic) {
     ctx.push(`This thread is on epic ${st.epic}${st.issue ? ', issue ' + st.issue : ''}.`);
     const want = C.buildTitle(st);
