@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2
+
+- **Epic from the project's name.** A thread in a Claude project named for an epic (`E03`, or `E03 · Prove the host`) is filed on that epic from its first wake, so it isn't asked the epic question and its writes aren't held. Unattended runs no longer stall waiting for a person. Only an epic in this tree counts. "No epic", "not Outer-Pale" or naming another epic still win, and a thread already waiting on the question is filed by its next wake.
+- **Tree found from above the repo.** When the session's folder holds no tree and none is above it (a cloud session in `/home/user`), the one folder directly below it that has `epics/` or `masters/` is used, before falling back to `/mnt/project-files`. Two or more such folders are not guessed between.
+
 ## 0.4.1
 
 - **The Linear guard fails closed.** If the PreToolUse hook throws, a Linear write (`save_*`, `create_*`, `delete_*`, …) is refused with the error in the reason, where before the hook exited 0 and the write went through unchecked. Other tools and Linear reads still pass on an error.

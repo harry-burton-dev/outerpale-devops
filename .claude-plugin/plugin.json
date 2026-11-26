@@ -1,6 +1,6 @@
 {
   "name": "outerpale-devops",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Outer-Pale dev-ops: ties Claude threads, files and artifacts to Linear epics and issues in the Outer-Pale workspace only, asks up front whether a thread needs an epic or is Outer-Pale work at all, and sends sessions to Langfuse. Successor to endstate-ops.",
   "author": {
     "name": "Harry"

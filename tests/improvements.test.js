@@ -200,9 +200,9 @@ test('the vault is gone: no module, no option', () => {
   assert.ok(!('vault' in m.userConfig));
   assert.ok(!('vault' in C.config()));
 });
-test('version is 0.4.1 and history lives in CHANGELOG.md', () => {
+test('version is 0.4.2 and history lives in CHANGELOG.md', () => {
   const m = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8'));
-  assert.strictEqual(m.version, '0.4.1');
+  assert.strictEqual(m.version, '0.4.2');
   const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
   assert.doesNotMatch(readme, /What changed from/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'CHANGELOG.md'), 'utf8'), /0\.4\.0/);
