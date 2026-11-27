@@ -11,155 +11,98 @@ const W = require('../lib/workspace');
 const T = require('../lib/telemetry');
 
 function rules(cfg) {
-  return `outerpale-devops: name the epic and issue you are working on (e.g. "FE ${cfg.team}-401"), say "no epic" to work unfiled, or "not Outer-Pale" if this isn't Outer-Pale work. ` +
-    'Temporary outputs (plans, reviews, notes) are .md files in epics/<EPIC>-…/notes/ or the issue folder, never artifacts. ' +
-    'Artifacts proper are published from epics/<EPIC>-…/artifacts/*.html or masters/; an unfiled thread uses unfiled/. ' +
-    'Titles follow "EPIC · ISSUE · description". ' +
+  return `outerpale-devops: each session works on one Linear issue, project or initiative, or on none. ` +
+    `One PR per issue, with the issue ID in the PR title (for example "${cfg.team}-123: …") and "Fixes ${cfg.team}-123" in its body; ` +
+    'Linear links the PR and moves the issue when it merges. Design work has its own issue ("Design: …") in its project. ' +
+    'An issue\'s implementation plan is in its description. Finished design docs go in docs/design/; scratch, EGM working files and reviews in .work/. ' +
     `Linear is the ${cfg.workspaceName} workspace (team ${cfg.team}) only; writes to any other workspace are refused.`;
 }
-const STAND_ASIDE = 'outerpale-devops: not Outer-Pale work, so the plugin stands aside for this thread: no epic, and no title or folder rules. Linear writes still go to Outer-Pale only. Naming an epic or issue later files the thread.';
+const STAND_ASIDE = 'outerpale-devops: this session has no Linear scope, so the plugin stands aside: no title and no PR rule. Linear writes still go to Outer-Pale only.';
 const MAX_EVENTS = 50; // kept until the next Langfuse send; oldest dropped if Langfuse is off
 function note(st, name, extra) {
   st.events = [...(st.events || []), { name, at: new Date().toISOString(), ...extra }].slice(-MAX_EVENTS);
 }
-
 function out(obj) { if (obj) process.stdout.write(JSON.stringify(obj)); }
-
-function pointer(root, sid) {
-  try {
-    const f = C.pointerFile();
-    fs.mkdirSync(path.dirname(f), { recursive: true });
-    fs.writeFileSync(f, String(sid || ''));
-  } catch {}
+function pointer(sid) {
+  try { fs.mkdirSync(path.dirname(C.pointerFile()), { recursive: true }); fs.writeFileSync(C.pointerFile(), String(sid || '')); } catch {}
+}
+function scopeLine(st) {
+  if (st.scope === 'issue') return `This session is on issue ${st.ref}.`;
+  if (st.scope === 'project' || st.scope === 'initiative') return `This session is on the ${st.scope} ${st.ref}.`;
+  return null;
 }
 
-function registryLine(reg) {
-  const codes = Object.values(reg).filter(e => e.status !== 'closed').map(e => `${e.code} (${e.name}${e.linear ? ', ' + e.linear : ''})`);
-  return codes.length ? `Open epics: ${codes.join('; ')}.` : 'No epics exist yet: use the open-epic skill.';
+// What to do once a session is on an issue. Said once per issue.
+function startedOn(st) {
+  return `outerpale-devops: this session is on ${st.ref}. Run the start-issue skill: it moves ${st.ref} to In Progress, posts this session's link on it, ` +
+    `and reads its implementation plan from the description. Open one PR for ${st.ref}, titled "${st.ref}: …".`;
+}
+function scoped(st) {
+  if (st.scope === 'issue') return startedOn(st);
+  if (st.scope === 'none') return STAND_ASIDE;
+  return `outerpale-devops: this session is on the ${st.scope} ${st.ref}. Design work and breakdown happen here (break-down skill); ` +
+    'any PR it opens belongs to an issue in it, such as its "Design: …" issue.';
+}
+function setScope(st, s) {
+  st.scope = s.scope; st.ref = s.ref;
+  note(st, 'scope-set', { scope: s.scope, ref: s.ref });
+  const said = scoped(st);
+  if (st.scope === 'issue') { if (st.touched.includes(st.ref)) return null; st.touched.push(st.ref); }
+  return said;
 }
 
-// Put once, on the first prompt with the person's own words in an unfiled thread.
-function askEpic(cfg, root, reg) {
-  const open = Object.values(reg).filter(e => e.status !== 'closed').map(e => e.code);
-  return 'outerpale-devops: before doing any work, judge whether this is Outer-Pale engineering ' +
-    '(building, designing, specifying or running Outer-Pale products, code or infrastructure) or general use of Claude ' +
-    '(a question, a personal task, setting up tools, writing unrelated to Outer-Pale). ' +
-    (C.hasTree(root) ? 'This folder is an Outer-Pale project. ' : 'This folder is not an Outer-Pale project (no epics/ or masters/). ') +
-    'Then make your first tool call one AskUserQuestion: state your judgement in the question, put your recommendation first, and offer ' +
-    (open.length ? `"Use epic <CODE>" for the best-fitting open epic (${open.join(', ')}), ` : '') +
-    '"Open a new epic", "No epic" and "Not Outer-Pale work". Do no other work until they answer. On "Open a new epic", run the open-epic skill.';
+const QUESTION = 'outerpale-devops: before doing any work, make your first tool call one AskUserQuestion asking which Linear issue, project or initiative this session is for. ' +
+  'If it is quick, look up likely open issues and projects with the Linear connector first. Put your recommendation first, and label the options exactly ' +
+  '"Issue OUT-123: <title>", "Project: <name>", "Initiative: <name>" and "None" (not Outer-Pale work, or no Linear scope). Do no other work until they answer.';
+
+// The person's answer to the scope question; changes st and returns what to tell Claude.
+function applyAnswer(st, input, cfg) {
+  if (!input || !C.awaitingScope(st)) return null;
+  const qs = (input.tool_input && input.tool_input.questions) || [];
+  if (!qs.some(q => /\b(issue|project|initiative|scope)\b/i.test((q && q.question) || ''))) return null;
+  const s = C.parseScope(C.answersOf(input), cfg.team);
+  return s ? setScope(st, s) || scopeLine(st) : null;
+}
+function fromTranscript(st, input, cfg) {
+  return C.awaitingScope(st) ? applyAnswer(st, C.answerFromTranscript(input.transcript_path, st.askedAt || 0), cfg) : null;
 }
 
-async function sessionStart(input, cfg, root) {
-  const st = C.loadState(root, input.session_id);
-  pointer(root, input.session_id);
-  const reg = C.epics(root);
-  const ctx = st.outOfScope ? [] : [rules(cfg), registryLine(reg)];
-  const res = { hookSpecificOutput: { hookEventName: 'SessionStart' } };
-  const t0 = !st.epic && input.session_title && input.session_title.match(C.schema(cfg.team).thread);
-  if (t0 && t0.groups.epic) {
-    st.epic = t0.groups.epic; st.issue = t0.groups.issue || null; st.desc = t0.groups.desc;
-    C.saveState(root, input.session_id, st);
-  }
-  if (st.epic) {
-    ctx.push(`This thread is on epic ${st.epic}${st.issue ? ', issue ' + st.issue : ''}.`);
-    const want = C.buildTitle(st);
-    if (input.session_title !== want) res.hookSpecificOutput.sessionTitle = want;
-  }
-  if (ctx.length) res.hookSpecificOutput.additionalContext = ctx.join(' ');
+async function sessionStart(input, cfg) {
+  const st = C.loadState(input.session_id);
+  pointer(input.session_id);
+  if (st.scope === 'none') return null;
+  const res = { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: [rules(cfg), scopeLine(st)].filter(Boolean).join(' ') } };
+  const want = C.buildTitle(st);
+  if (want && input.session_title !== want) res.hookSpecificOutput.sessionTitle = want;
   return res;
 }
 
-async function promptSubmit(input, cfg, root) {
+async function promptSubmit(input, cfg) {
   const sid = input.session_id;
-  pointer(root, sid);
+  pointer(sid);
   const prompt = C.promptText(input.prompt);
-  const reg = C.epics(root);
-  const st = C.loadState(root, sid);
-  // A forked or renamed thread with no saved state adopts the IDs in its title.
-  const sc0 = C.schema(cfg.team);
-  const t0 = !st.epic && input.session_title && input.session_title.match(sc0.thread);
+  const st = C.loadState(sid);
   const ctx = [];
-  if (st.desc && /[<>]/.test(st.desc)) st.desc = null;  // saved by a version that kept markup
-  if (t0 && t0.groups.epic) {
-    st.epic = t0.groups.epic; st.issue = t0.groups.issue || null; st.desc = t0.groups.desc;
-    if (st.issue && !st.touched.includes(st.issue)) {
-      st.touched.push(st.issue);
-      ctx.push(`outerpale-devops: this thread (a fork or resumed copy) is on ${st.issue}. Post this thread's link as a comment on ${st.issue} in Linear unless it is already there.`);
-    }
+  const said = fromTranscript(st, input, cfg);
+  if (said) ctx.push(said);
+  if (st.scope === 'none') { C.saveState(sid, st); return ctx.length ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: ctx.join(' ') } } : null; }
+  if (!prompt) return null;                               // no words of the person's: nothing to act on
+  const named = C.parseScope(prompt, cfg.team);
+  if (named && named.scope === 'issue' && named.ref !== st.ref) {
+    const li = await L.issueTitle(cfg.linearKey, named.ref, cfg.workspaceId);
+    st.desc = (li && li.title) || C.describe(prompt);
+    const s = setScope(st, named);
+    if (s) ctx.push(s);
   }
-  const gone = C.reconcile(st, reg);
-  if (gone) ctx.push(`outerpale-devops: ${gone} is not an epic in this project (${Object.keys(reg).join(', ') || 'none open'}), so this thread is no longer on it. Name the epic to use here.`);
-  if (C.awaitingScope(st)) { const said = applyAnswer(st, C.answerFromTranscript(input.transcript_path, st.askedAt || 0), reg, cfg); if (said) ctx.push(said); }
-  const human = prompt !== '';
-  const p = C.parsePrompt(prompt, reg, cfg.team);
-  const prevIssue = st.issue;
-  if (p.outOfScope && !st.outOfScope && !st.epic) {
-    st.outOfScope = true; st.noEpic = false; st.epic = null; st.issue = null;
-    note(st, 'not-outer-pale');
-    C.saveState(root, sid, st);
-    return { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: STAND_ASIDE } };
-  }
-  // A stood-aside thread is filed again only by an issue ID or "epic <CODE>", not a stray two-letter word.
-  if (st.outOfScope && (p.issue || (p.epic && new RegExp(`\\bepic\\s+${p.epic}\\b`, 'i').test(prompt)))) st.outOfScope = false;
-  if (st.outOfScope) { C.saveState(root, sid, st); return null; }
-  if (p.noEpic && !st.noEpic) {
-    st.noEpic = true; st.epic = null; st.issue = null;
-    note(st, 'no-epic-chosen');
-    ctx.push('outerpale-devops: working without an epic, as asked. Write documents in unfiled/ and title artifacts "UNFILED · …". Name an epic at any time to file the thread.');
-  }
-  if ((p.epic || p.issue) && st.noEpic) st.noEpic = false;
-  if (p.epic && p.epic !== st.epic) { if (!p.issue && st.epic) st.issue = null; st.epic = p.epic; note(st, 'epic-chosen', { epic: p.epic }); }
-  if (p.issue && p.issue !== st.issue) {
-    const owner = C.epicOfIssue(reg, p.issue);
-    if (!st.epic && owner) st.epic = owner;
-    if (owner && st.epic && owner !== st.epic) ctx.push(`${p.issue} is filed under epic ${owner}, not ${st.epic}. Confirm which epic before writing.`);
-    st.issue = p.issue;
-  }
-  if (st.issue && st.issue !== prevIssue) {
-    const li = await L.issueTitle(cfg.linearKey, st.issue, cfg.workspaceId);
-    st.desc = (li && li.title) || C.describe(prompt, reg) || st.desc;
-    if (!st.touched.includes(st.issue)) {
-      st.touched.push(st.issue);
-      ctx.push(`outerpale-devops: this thread has started on ${st.issue}. Post this thread's link as a comment on ${st.issue} in Linear (one line: "Thread started: <title> <link>") unless it is already there.`);
-    }
-    if (!reg[st.epic] || !(st.issue in reg[st.epic].issues)) ctx.push(`${st.issue} isn't listed in ${st.epic ? 'epic ' + st.epic : 'any epic'} yet: run the start-issue skill to add it.`);
-  }
-  if (st.issue && !st.touched.includes(st.issue)) {
-    st.touched.push(st.issue);
-    ctx.push(`outerpale-devops: this thread (a fork or resumed copy) is on ${st.issue}. Post this thread's link as a comment on ${st.issue} in Linear unless it is already there.`);
-  }
-  // An unfiled thread in a project named for an epic ("E03") is on that epic, so the question isn't needed.
-  if (!st.epic && !st.noEpic) {
-    const pe = C.projectEpic(input.prompt, reg);
-    if (pe) {
-      st.epic = pe;
-      note(st, 'epic-from-project', { epic: pe });
-      ctx.push(`outerpale-devops: this thread is on epic ${pe}, taken from the project's name. Run start-issue for the issue you work on. Name another epic or say "no epic" to change it.`);
-    }
-  }
-  // The description comes only from the person's words; a placeholder is never saved.
-  if (!st.desc && human) st.desc = C.describe(prompt, reg);
-
-  // Respect a manual title that already fits the schema and the same IDs.
-  const sc = C.schema(cfg.team);
-  const cur = input.session_title;
-  const m = cur && cur.match(sc.thread);
-  if (m && (m.groups.epic || null) === st.epic && (m.groups.issue || null) === (st.issue || null)) st.desc = m.groups.desc;
-  const want = C.buildTitle({ ...st, desc: st.desc || 'New thread' });
-  const filed = !!(st.epic || st.noEpic);
-  if (!filed && human && !st.asked && cfg.policy !== 'block') {
+  if (!st.desc) st.desc = C.describe(prompt);
+  if (!st.scope && !st.asked) {
     st.asked = true; st.askedAt = C.transcriptSize(input.transcript_path);  // answers before this are old
-    ctx.push(askEpic(cfg, root, reg));
+    ctx.push(QUESTION);
   }
-  C.saveState(root, sid, st);
-
-  if (!filed && cfg.policy === 'block') {
-    return { decision: 'block', reason: `outerpale-devops: name the epic first (${Object.keys(reg).join(', ') || 'none open: ask Claude to open one'}), for example "FE ${cfg.team}-401 …", say "no epic", or say "not Outer-Pale".` };
-  }
+  C.saveState(sid, st);
   const res = { hookSpecificOutput: { hookEventName: 'UserPromptSubmit' } };
-  // An unfiled thread keeps the app's own title until the person decides.
-  if (filed && cur !== want) res.hookSpecificOutput.sessionTitle = want;
+  const want = C.buildTitle(st);
+  if (want && input.session_title !== want) res.hookSpecificOutput.sessionTitle = want;
   if (ctx.length) res.hookSpecificOutput.additionalContext = ctx.join(' ');
   return res;
 }
@@ -167,149 +110,55 @@ async function promptSubmit(input, cfg, root) {
 function deny(reason) {
   return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: `outerpale-devops: ${reason}` } };
 }
-function warn(text) {
-  return { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: `outerpale-devops: ${text}` } };
-}
-function htmlTitle(file) {
-  try { const m = fs.readFileSync(file, 'utf8').match(/<title>([\s\S]*?)<\/title>/i); return m ? m[1].trim() : null; } catch { return null; }
+// The title of a PR being opened, or null if this tool call doesn't open one.
+function prTitle(name, ti) {
+  if (/^mcp__.+__create_pull_request$/.test(name)) return String(ti.title || '');
+  if (name === 'Bash' && /\bgh\s+pr\s+create\b/.test(ti.command || '')) {
+    const m = String(ti.command).match(/(?:--title|-t)(?:\s+|=)(?:"([^"]*)"|'([^']*)'|(\S+))/);
+    return m ? (m[1] ?? m[2] ?? m[3]) : '';
+  }
+  return null;
 }
 
-async function preTool(input, cfg, root) {
+async function preTool(input, cfg) {
   const name = input.tool_name;
-  // Linear writes go to the configured workspace only. Never softened by the unfiled policy.
-  // Checked before any state work, so a failure there can't skip it.
+  // Linear writes go to the configured workspace only. Checked before any state work, so a failure there can't skip it.
   const guard = W.check(name, cfg);
   if (guard) {
     try {
-      const gst = C.loadState(root, input.session_id);
+      const gst = C.loadState(input.session_id);
       note(gst, guard.event.name, guard.event);
-      C.saveState(root, input.session_id, gst);
+      C.saveState(input.session_id, gst);
     } catch (err) {
       process.stderr.write(`outerpale-devops: couldn't record the Linear refusal: ${err.message}\n`);
     }
     return deny(guard.reason);
   }
+  const st = C.loadState(input.session_id);
+  if (fromTranscript(st, input, cfg)) C.saveState(input.session_id, st);
 
-  const st = C.loadState(root, input.session_id);
-  const ti = input.tool_input || {};
-  const soft = cfg.policy === 'unfiled';
-  const refuse = r => (soft ? warn(r) : deny(r));
-  const reg0 = C.epics(root);
-  if (C.reconcile(st, reg0)) C.saveState(root, input.session_id, st);
-  if (C.awaitingScope(st) && applyAnswer(st, C.answerFromTranscript(input.transcript_path, st.askedAt || 0), reg0, cfg)) C.saveState(root, input.session_id, st);
-  if (st.outOfScope) return null;
-  const publishing = name !== 'Artifact' || ((ti.action || 'publish') === 'publish' && !ti.asset);
-  if (C.awaitingScope(st) && publishing && /^(Write|Edit|MultiEdit|NotebookEdit|Artifact)$|^mcp__.+__batch$/.test(name)) {
-    return refuse('answer the epic question first. Ask the person with AskUserQuestion: use an epic, open a new epic, "No epic", or "Not Outer-Pale work".');
+  // One PR per issue, with the issue ID in its title.
+  const title = prTitle(name, input.tool_input || {});
+  if (title === null || st.scope === 'none') return null;
+  if (C.awaitingScope(st)) return deny('answer the scope question first: which Linear issue, project or initiative is this session for?');
+  const ids = title.match(new RegExp(`\\b${cfg.team}-\\d+\\b`, 'g')) || [];
+  if (st.scope === 'issue' && !ids.includes(st.ref)) {
+    return deny(`this session is on ${st.ref}: one PR per issue, so title it "${st.ref}: …" and put "Fixes ${st.ref}" in the body.${ids.length ? ` ${ids.join(', ')} is another issue: work it in its own session.` : ''}`);
   }
-
-  if (/^(Write|Edit|MultiEdit|NotebookEdit)$/.test(name)) {
-    const p = ti.file_path || ti.notebook_path;
-    if (!p || !C.hasTree(root)) return null;              // a folder with no Outer-Pale tree isn't policed
-    const why = C.checkWrite(C.rel(root, p), st, cfg);
-    return why ? refuse(why) : null;
-  }
-
-  const sc = C.schema(cfg.team);
-  if (name === 'Artifact') {
-    const action = ti.action || 'publish';
-    if (action !== 'publish' || ti.asset) return null;
-    if (!st.epic && !st.noEpic) return refuse('this thread has no epic, so it can\'t publish an artifact. Name the epic and issue first, or say "no epic" to publish from unfiled/.');
-    if (ti.file_path) {
-      const r = C.rel(root, ti.file_path);
-      const home = st.epic ? `epics/${st.epic}-…/artifacts/*.html` : 'unfiled/*.html';
-      if (r === null || !sc.artifactFile.test(r) || (!st.epic && r.startsWith('epics/')) || (st.epic && r.startsWith('unfiled/'))) {
-        return refuse(`artifacts are published only from masters/*.html or ${home}. A plan, review or note is a temporary output: write it as .md in ${st.epic ? `epics/${st.epic}-…/notes/` : 'unfiled/'} instead.`);
-      }
-      const am = r.match(sc.artifactFile);
-      if (am.groups && am.groups.epic && am.groups.epic !== st.epic) return refuse(`${r} belongs to epic ${am.groups.epic}; this thread is on ${st.epic}.`);
-      const isMaster = r.startsWith('masters/');
-      const cur = htmlTitle(path.resolve(root, ti.file_path)) || ti.title || '';
-      const want = C.artifactTitle(cur, st, isMaster);
-      if (cur !== want) return refuse(`set the page's <title> to "${want}" and publish again.`);
-      return null;
-    }
-    if (ti.type_url) {
-      const want = C.artifactTitle(ti.title || '', st, false);
-      if (ti.title !== want && !sc.artifact.test(ti.title || '')) return refuse(`use title "${want}" (or "MASTER · …" for a live master) and create again.`);
-    }
-    return null;
-  }
-
-  if (/^mcp__.+__batch$/.test(name)) {
-    const create = ti.container && ti.container.create;
-    if (!create || !create.name) return null;
-    if (!st.epic && !st.noEpic && !/^MASTER · /.test(create.name)) return refuse('this thread has no epic, so it can\'t create a doc. Name the epic and issue first, or say "no epic".');
-    if (!sc.artifact.test(create.name)) {
-      return refuse(`name the doc "${C.artifactTitle(create.name, st, false)}" (or "MASTER · …" for a live master). A plan, review or note should be a .md file in the epic's notes/ folder, not a doc.`);
-    }
-    return null;
+  if ((st.scope === 'project' || st.scope === 'initiative') && !ids.length) {
+    return deny(`every PR belongs to an issue. Use this ${st.scope}'s issue for the work, such as "Design: …" for a design doc (create it in Linear if it doesn't exist), and title the PR "${cfg.team}-123: …".`);
   }
   return null;
 }
 
-function appendIndex(root, st, title, url, isMaster) {
-  const reg = C.epics(root);
-  const file = isMaster ? path.join(root, 'masters', 'index.md') : (reg[st.epic] ? path.join(root, reg[st.epic].dir, 'index.md') : null);
-  if (!file) return null;
-  let t = '';
-  try { t = fs.readFileSync(file, 'utf8'); } catch {}
-  if (t.includes(url)) return file;
-  if (!/^## Artifacts\s*$/m.test(t)) t = t.replace(/\s*$/, '\n\n## Artifacts\n');
-  const line = `- [${title}](${url})${st.issue && !isMaster ? ' · ' + st.issue : ''} · ${new Date().toISOString().slice(0, 10)}`;
-  t = t.replace(/(## Artifacts\s*\n)/, `$1${line}\n`);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, t);
-  return file;
-}
-
-// The person's answer to the epic question.
-// Changes st and returns what to tell Claude, or null when the answer isn't one.
-function applyAnswer(st, input, reg, cfg) {
-  if (!input || !C.awaitingScope(st)) return null;
-  const qs = (input.tool_input && input.tool_input.questions) || [];
-  if (!qs.some(q => /epic|outer[\s-]?pale/i.test((q && q.question) || ''))) return null; // no epic question in it
-  const text = C.answersOf(input);
-  const p = C.parsePrompt(text, reg, cfg.team);
-  let said;
-  if (p.outOfScope) { st.outOfScope = true; note(st, 'not-outer-pale'); said = STAND_ASIDE; }
-  else if (p.epic) {
-    st.epic = p.epic; note(st, 'epic-chosen', { epic: st.epic });
-    said = `outerpale-devops: this thread is now on epic ${st.epic}. Run start-issue for the issue you work on.`;
-  } else if (p.noEpic) { st.noEpic = true; note(st, 'no-epic-chosen'); said = 'outerpale-devops: working without an epic. Write documents in unfiled/ and title artifacts "UNFILED · …".'; }
-  else return null;                                       // "Open a new epic" or an issue alone: the skills file the thread
-  return said;
-}
-function scopeAnswer(input, cfg, root) {
-  const st = C.loadState(root, input.session_id);
-  const said = applyAnswer(st, input, C.epics(root), cfg);
-  if (!said) return null;
-  C.saveState(root, input.session_id, st);
-  return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: said } };
-}
-
-// A note written in an epic is listed under "## Notes" in its index.md, once.
-function indexNote(input, root) {
-  const p = (input.tool_input || {}).file_path;
-  const r = p && C.rel(root, p);
-  const m = r && r.match(/^(epics\/[A-Z][A-Z0-9]{1,5}-[a-z0-9-]+)\/((?:notes|decisions|issues\/[^/]+)\/[^/]+\.md)$/);
-  if (!m) return null;
-  const file = path.join(root, m[1], 'index.md');
-  let raw = '';
-  try { raw = fs.readFileSync(file, 'utf8'); } catch { return null; }
-  if (raw.includes(`](${m[2]})`)) return null;
-  const eol = raw.includes('\r\n') ? '\r\n' : '\n';       // keep the file's own line endings
-  let t = raw.replace(/\r\n/g, '\n');
-  if (!/^## Notes[ \t]*$/m.test(t)) t = t.replace(/\s*$/, '\n\n## Notes\n');
-  else if (!t.endsWith('\n')) t += '\n';
-  t = t.replace(/(^## Notes[ \t]*\n)/m, `$1- [${path.basename(m[2])}](${m[2]})\n`);
-  fs.writeFileSync(file, eol === '\n' ? t : t.replace(/\n/g, eol));
-  return null;
-}
-
-async function postTool(input, cfg, root) {
-  if (input.tool_name === 'AskUserQuestion') return scopeAnswer(input, cfg, root);
-  if (input.tool_name === 'Write') return indexNote(input, root);
+async function postTool(input, cfg) {
+  const st = C.loadState(input.session_id);
+  if (input.tool_name === 'AskUserQuestion') {
+    const said = applyAnswer(st, input, cfg);
+    if (!said) return null;
+    C.saveState(input.session_id, st);
+    return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: said } };
+  }
   const ws = W.record(input.tool_name, input.tool_response);
   if (ws) {
     const ok = ws.workspaceId === cfg.workspaceId;
@@ -317,38 +166,25 @@ async function postTool(input, cfg, root) {
       ? `outerpale-devops: this connector is on ${cfg.workspaceName}; its Linear writes are allowed.`
       : `outerpale-devops: this connector is on "${ws.name}", not ${cfg.workspaceName}. Its Linear writes will be refused.` } };
   }
-  const st = C.loadState(root, input.session_id);
+  // An artifact published while on an issue is linked from that issue.
+  if (input.tool_name !== 'Artifact' || st.scope !== 'issue') return null;
   const ti = input.tool_input || {};
+  if ((ti.action || 'publish') !== 'publish' || ti.asset) return null;
   const resp = typeof input.tool_response === 'string' ? input.tool_response : JSON.stringify(input.tool_response || '');
   const url = (resp.match(/https:\/\/claude\.ai\/(?:code\/)?artifact\/[A-Za-z0-9_-]+/) || [])[0];
   if (!url) return null;
-  let title;
-  let isMaster = false;
-  if (input.tool_name === 'Artifact') {
-    if ((ti.action || 'publish') !== 'publish' || ti.asset) return null;
-    title = (ti.file_path && htmlTitle(path.resolve(root, ti.file_path))) || ti.title || url;
-  } else {
-    const create = ti.container && ti.container.create;
-    if (!create) return null;
-    title = create.name;
-  }
-  isMaster = /^MASTER · /.test(title);
-  const file = appendIndex(root, st, title, url, isMaster);
-  const ctx = [];
-  if (file) ctx.push(`outerpale-devops: recorded "${title}" in ${C.rel(root, file)}.`);
-  if (st.issue && !isMaster) {
-    const ok = await L.attach(cfg.linearKey, st.issue, url, title, cfg.workspaceId);
-    ctx.push(ok ? `Attached it to ${st.issue} in Linear.` : `Now attach ${url} to ${st.issue} in Linear (create_attachment, title "${title}").`);
-  }
-  if (!ctx.length) return null;
-  return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: ctx.join(' ') } };
+  const title = ti.title || path.basename(ti.file_path || url);
+  const ok = await L.attach(cfg.linearKey, st.ref, url, title, cfg.workspaceId);
+  return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: ok
+    ? `outerpale-devops: attached ${url} to ${st.ref} in Linear.`
+    : `outerpale-devops: now attach ${url} to ${st.ref} in Linear (create_attachment, title "${title}").` } };
 }
 
 // Stop: send the new turns to Langfuse. Says nothing to Claude.
-async function stop(input, cfg, root) {
-  const st = C.loadState(root, input.session_id);
+async function stop(input, cfg) {
+  const st = C.loadState(input.session_id);
   try {
-    if (await T.flush(cfg, input, st)) C.saveState(root, input.session_id, st);
+    if (await T.flush(cfg, input, st)) C.saveState(input.session_id, st);
   } catch (err) {
     process.stderr.write(`outerpale-devops: Langfuse send failed: ${err.message}\n`);
   }
@@ -362,11 +198,9 @@ async function main(state) {
   for await (const chunk of process.stdin) raw += chunk;
   state.raw = raw;
   const input = raw ? JSON.parse(raw) : {};
-  const cfg = C.config();
-  const root = C.projectDir(input);
+  if (!input) return;
   const fn = { 'session-start': sessionStart, 'prompt-submit': promptSubmit, 'pre-tool': preTool, 'post-tool': postTool, stop }[event];
-  if (!fn) return;
-  out(await fn(input, cfg, root));
+  if (fn) out(await fn(input, C.config()));
 }
 
 // On an error the hook fails open, except that a Linear write is refused (fails closed).

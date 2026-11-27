@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0
+
+Rebuilt around project management in Linear, for Claude Code sessions rather than claude.ai Projects.
+
+- **Scope, not epics.** A session works on one Linear issue, project or initiative, or on none. The first prompt of an unscoped session asks which; a prompt opening with an issue ID answers it. "None" replaces both "no epic" and "not Outer-Pale".
+- **One PR per issue.** A PR (GitHub connector or `gh pr create`) must carry the session's issue ID in its title; a project or initiative session's PR must carry some issue's ID, such as its "Design: …" issue. Linear's GitHub integration does the linking and status moves.
+- **Plans in issues.** New `break-down` skill turns a project's design doc into issues with implementation plans in their descriptions. `start-issue` reads the plan. New `close-project` replaces `close-epic`; `sweep` now checks Linear only.
+- **Nothing in the project's repository.** Session state moved to `~/.linear-link/sessions/`. Removed: the `epics/`, `masters/` and `unfiled/` folder rules, artifact title and location rules, `index.md` upkeep, `open-epic`, `templates/`, and the `policy`, `allow_docs` and `root` options.
+- Kept: the Outer-Pale workspace guard (fails closed), session titles (`OUT-123 · …`), artifacts attached to the issue, Langfuse (now tagged with the scope).
+
 ## 0.4.2
 
 - **Epic from the project's name.** A thread in a Claude project named for an epic (`E03`, or `E03 · Prove the host`) is filed on that epic from its first wake, so it isn't asked the epic question and its writes aren't held. Unattended runs no longer stall waiting for a person. Only an epic in this tree counts. "No epic", "not Outer-Pale" or naming another epic still win, and a thread already waiting on the question is filed by its next wake.
