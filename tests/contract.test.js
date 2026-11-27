@@ -1,6 +1,6 @@
 'use strict';
 // outerpale-devops 0.5.0: a session works on one Linear issue, project or initiative, or none.
-// One PR per issue, with the issue ID in its title. Linear writes go to Outer-Pale only.
+// One PR per issue, with the issue ID in its title. No Linear workspace guard (removed in 0.8.1).
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -49,7 +49,8 @@ test('session start states the contract and the workspace in a scoped session, a
   assert.match(c, /^outerpale-devops: /);
   assert.match(c, /one Linear issue, project or initiative/);
   assert.match(c, /one PR per issue/i);
-  assert.match(c, /Outer-Pale workspace \(team OUT\) only/);
+  assert.match(c, /Outer-Pale workspace \(team OUT\)/);
+  assert.doesNotMatch(c, /refused/);
   assert.match(c, /\.planning\//);
   assert.doesNotMatch(c, /EGM|docs\/design/);
 });
@@ -102,12 +103,12 @@ test('a subagent report is not the person: it sets nothing and asks nothing', ()
   assert.equal(r, null);
 });
 
-test('"ll scope none" stands the plugin aside, but the Linear guard still holds', () => {
+test('"ll scope none" stands the plugin aside', () => {
   const s = session(); s.ll('scope', 'none');
   assert.equal(s.run('prompt-submit', { prompt: 'OUT-5 set up my dotfiles' }), null);
   assert.equal(s.state().scope, 'none');
   assert.ok(!denied(pr(s, 'Tidy dotfiles')));
-  assert.ok(denied(s.run('pre-tool', { tool_name: `${LINEAR}__save_issue`, tool_input: {} })));
+  assert.equal(s.run('pre-tool', { tool_name: `${LINEAR}__save_issue`, tool_input: {} }), null);
 });
 
 test('build-issue replaces start-issue, and it asks for the issue and records it', () => {
@@ -172,41 +173,38 @@ test('promptText keeps only the person\'s words, and titles carry no markup', ()
   assert.equal(C.buildTitle({ scope: 'none' }), null);
 });
 
-// ---------- the Linear workspace guard (kept from 0.4) ----------
-const wsResponse = (id, name, slug) => [{ type: 'text', text: JSON.stringify({ id, name, url: `https://linear.app/${slug}` }) }];
-
-test('guard: an unchecked connector cannot write; after get_workspace shows Outer-Pale it can; a personal one stays blocked', () => {
-  const s = session();
-  assert.match(hso(s.run('pre-tool', { tool_name: `${LINEAR}__save_issue`, tool_input: {} })).permissionDecisionReason, /get_workspace first/);
-  assert.match(ctx(s.run('post-tool', { tool_name: `${LINEAR}__get_workspace`, tool_input: {}, tool_response: wsResponse(OUTERPALE, 'Outer-Pale', 'outer-pale') })), /writes are allowed/);
-  assert.equal(s.run('pre-tool', { tool_name: `${LINEAR}__save_issue`, tool_input: {} }), null);
-  assert.match(ctx(s.run('post-tool', { tool_name: `${PERSONAL}__get_workspace`, tool_input: {}, tool_response: wsResponse('11111111-2222-4333-8444-555555555555', 'Harry personal', 'harry') })), /will be refused/);
-  const r = s.run('pre-tool', { tool_name: `${PERSONAL}__save_comment`, tool_input: {} });
-  assert.match(hso(r).permissionDecisionReason, new RegExp(`Use ${LINEAR}__save_comment instead`));
-  for (const t of ['mcp__gmail__delete_draft', `${LINEAR}__list_issues`]) assert.equal(s.run('pre-tool', { tool_name: t, tool_input: {} }), null, t);
+// ---------- no Linear workspace guard: a fresh session's Linear writes go straight through ----------
+test('a brand new session writes to Linear without calling get_workspace, scoped or not', () => {
+  for (const scope of [null, 'OUT-7']) {
+    const s = session();
+    if (scope) s.ll('scope', 'issue', scope);
+    for (const t of ['save_issue', 'save_comment', 'create_attachment', 'delete_comment']) {
+      assert.equal(s.run('pre-tool', { tool_name: `${LINEAR}__${t}`, tool_input: {} }), null, t);
+      assert.equal(s.run('pre-tool', { tool_name: `${PERSONAL}__${t}`, tool_input: {} }), null, t);
+    }
+    assert.ok(!fs.existsSync(path.join(s.home, '.linear-link', 'linear-connectors.json')));
+  }
 });
 
 // State that can be read but not saved: a directory where the session file should be. Works as root too.
 function unsavable(s) { fs.mkdirSync(path.join(s.home, '.linear-link', 'sessions', 's.json', 'x'), { recursive: true }); }
 
-test('guard: a hook error refuses Linear writes and names the error, and lets everything else through', () => {
-  const s = session();
-  s.run('post-tool', { tool_name: `${LINEAR}__get_workspace`, tool_input: {}, tool_response: wsResponse(OUTERPALE, 'Outer-Pale', 'outer-pale') });
-  unsavable(s);
-  const r = s.run('pre-tool', { tool_name: `${LINEAR}__save_issue`, tool_input: {} });
-  assert.ok(denied(r));
-  assert.match(hso(r).permissionDecisionReason, /hook failed \(.*EISDIR.*\)/);
-  for (const t of ['Read', `${LINEAR}__get_issue`]) assert.equal(s.run('pre-tool', { tool_name: t, tool_input: {} }), null, t);
+test('a hook error fails open for every tool, Linear writes included', () => {
+  const s = session(); unsavable(s);
+  for (const t of ['Read', `${LINEAR}__save_issue`]) assert.equal(s.run('pre-tool', { tool_name: t, tool_input: {} }), null, t);
+  assert.equal(s.run('prompt-submit', { prompt: 'OUT-7 fix it' }), null);
   const raw = input => execFileSync('node', [RUN, 'pre-tool'], { input, env: env(tmp()) }).toString();
-  assert.match(hso(JSON.parse(raw(`{"tool_name":"${LINEAR}__save_issue","tool_input":`))).permissionDecisionReason, /hook failed/);
-  assert.equal(raw('{"tool_name":"Read","tool_input":'), '');
+  assert.equal(raw(`{"tool_name":"${LINEAR}__save_issue","tool_input":`), '');
 });
 
-test('hooks.json covers the guard, the PR gate and artifacts', () => {
+test('hooks.json covers the PR gate and artifacts, and nothing of the old guard', () => {
   const hooks = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'hooks', 'hooks.json'), 'utf8')).hooks;
   const covers = (ev, name) => hooks[ev].some(h => new RegExp(`^(?:${h.matcher || '.*'})$`).test(name));
-  for (const t of [`${LINEAR}__save_issue`, `${LINEAR}__create_attachment`, 'mcp__github__create_pull_request', 'Bash']) assert.ok(covers('PreToolUse', t), t);
-  for (const t of [`${LINEAR}__get_workspace`, 'Artifact']) assert.ok(covers('PostToolUse', t), t);
+  for (const t of ['mcp__github__create_pull_request', 'Bash']) assert.ok(covers('PreToolUse', t), t);
+  assert.ok(covers('PostToolUse', 'Artifact'));
+  for (const t of [`${LINEAR}__save_issue`, `${LINEAR}__create_attachment`]) assert.ok(!covers('PreToolUse', t), t);
+  assert.ok(!covers('PostToolUse', `${LINEAR}__get_workspace`));
+  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'lib', 'workspace.js')));
 });
 
 // ---------- no telemetry of its own: Claude Code's OpenTelemetry export does that ----------

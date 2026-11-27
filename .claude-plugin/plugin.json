@@ -1,7 +1,7 @@
 {
   "name": "outerpale-devops",
-  "version": "0.8.0",
-  "description": "Outer-Pale project management: each session works on one Linear issue, project or initiative (or none), one PR per issue with its ID in the title, one Linear issue per GSD phase, and Linear writes to the Outer-Pale workspace only.",
+  "version": "0.8.1",
+  "description": "Outer-Pale project management: each session works on one Linear issue, project or initiative (or none), one PR per issue with its ID in the title, and one Linear issue per GSD phase.",
   "author": {
     "name": "Harry"
   },
@@ -15,7 +15,7 @@
     "linear_workspace_id": {
       "type": "string",
       "title": "Linear workspace ID",
-      "description": "The only Linear workspace the plugin lets Claude write to. Writes through a connector on any other workspace are refused.",
+      "description": "The workspace a Linear API key must belong to before hooks use it.",
       "default": "dca1918d-09ae-4f88-9f63-c6223b86893e"
     },
     "linear_workspace": {

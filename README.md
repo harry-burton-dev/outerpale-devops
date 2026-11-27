@@ -19,7 +19,6 @@ Linear's GitHub integration links each PR to its issue from the ID and moves the
 | --- | --- | --- |
 | Scope | A session starts unscoped, and the plugin stands aside. The `build-issue` skill sets the scope (asking which issue if none is named), as does a prompt that opens with an issue ID (`OUT-401 …`, "switch to OUT-402") or a launch prompt whose first line is `Project: <name>` or `Initiative: <name>`. `break-down` sets its project | UserPromptSubmit, `scripts/ll.js` |
 | One PR per issue | An issue session's PR must carry its own issue ID in the title. A project or initiative session's PR must carry some issue's ID, such as its design issue's. An unscoped session has no PR rule. Covers the GitHub connector's `create_pull_request` and `gh pr create` | PreToolUse |
-| Linear workspace | Writes only to Outer-Pale, whatever the scope, including "None". Fails closed if the hook errors | PreToolUse on Linear write tools, PostToolUse on `get_workspace` |
 | Session title | `OUT-123 · description`, or `<project> · description`; untouched when unscoped or "None" | SessionStart and UserPromptSubmit set `sessionTitle` |
 | Artifact ↔ issue | An artifact published in an issue session is attached to the issue (directly with a Linear key, otherwise via Claude) | PostToolUse on Artifact |
 
@@ -50,4 +49,4 @@ Don't run it alongside endstate-ops or linear-link: they would all answer the sa
 node --test tests/
 ```
 
-`tests/contract.test.js` covers the scope, one PR per issue and the workspace guard.
+`tests/contract.test.js` covers the scope and one PR per issue.

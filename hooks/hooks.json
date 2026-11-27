@@ -43,7 +43,7 @@
         ]
       },
       {
-        "matcher": "mcp__.+__(save_.+|create_.+|delete_.+|share_issue|unshare_issue|merge_diff|submit_diff_review|resolve_diff_thread|update_diff|mark_notification|retire_.+|restore_.+|prepare_.+)",
+        "matcher": "mcp__.+__create_pull_request",
         "hooks": [
           {
             "type": "command",
@@ -59,19 +59,6 @@
     "PostToolUse": [
       {
         "matcher": "Artifact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PLUGIN_ROOT}/hooks/run.js",
-              "post-tool"
-            ]
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__.+__get_workspace",
         "hooks": [
           {
             "type": "command",
