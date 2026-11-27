@@ -13,7 +13,7 @@ function rules(cfg) {
   return `outerpale-devops: each session works on one Linear issue, project or initiative, or on none. ` +
     `One PR per issue, with the issue ID in the PR title (for example "${cfg.team}-123: …") and "Fixes ${cfg.team}-123" in its body; ` +
     'Linear links the PR and moves the issue when it merges. Design work has its own issue ("Design: …") in its project. ' +
-    'An issue\'s implementation plan is in its description. Finished design docs go in docs/design/; scratch, EGM working files and reviews in .work/. ' +
+    'Work runs through GSD: one Linear issue is one GSD phase. The issue holds the goal and acceptance criteria; the phase\'s plan is in .planning/ (committed), and scratch goes in .work/. ' +
     `Linear is the ${cfg.workspaceName} workspace (team ${cfg.team}) only; writes to any other workspace are refused.`;
 }
 const STAND_ASIDE = 'outerpale-devops: this session has no Linear scope, so the plugin stands aside: no title and no PR rule. Linear writes still go to Outer-Pale only.';
@@ -30,12 +30,12 @@ function scopeLine(st) {
 // What to do once a session is on an issue. Said once per issue.
 function startedOn(st) {
   return `outerpale-devops: this session is on ${st.ref}. Run the start-issue skill: it moves ${st.ref} to In Progress, posts this session's link on it, ` +
-    `and reads its implementation plan from the description. Before opening its one PR (titled "${st.ref}: …"), run the outerpale-startup:intent-reviewer agent on the diff.`;
+    `and finds its GSD phase (linked from the issue; its plan is the phase's PLAN.md in .planning/). Before opening its one PR (titled "${st.ref}: …"), run the outerpale-startup:intent-reviewer agent on the diff.`;
 }
 function scoped(st) {
   if (st.scope === 'issue') return startedOn(st);
   if (st.scope === 'none') return STAND_ASIDE;
-  return `outerpale-devops: this session is on the ${st.scope} ${st.ref}. Design work and breakdown happen here (break-down skill); ` +
+  return `outerpale-devops: this session is on the ${st.scope} ${st.ref}. Design, roadmap and breakdown happen here (GSD's discuss and plan steps, then the break-down skill); ` +
     'any PR it opens belongs to an issue in it, such as its "Design: …" issue.';
 }
 function setScope(st, s) {

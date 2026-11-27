@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+
+- **GSD instead of EGM.** One Linear issue is one GSD phase. The issue holds the goal and acceptance criteria; the plan is the phase's `PLAN.md` in `.planning/`, which is committed. `start-issue` finds or adds the issue's phase, `break-down` turns the GSD roadmap into one issue per phase, `close-project` uses GSD's milestone audit, and `sweep` checks issues against phases.
+
 ## 0.6.0
 
 - **No telemetry of its own.** The Langfuse sender (the Stop hook, `lib/telemetry.js`, the session event log and the `langfuse_*` and `telemetry_content` options) is gone. Claude Code's own OpenTelemetry export sends session traces instead.
