@@ -29,7 +29,7 @@ function scopeLine(st) {
 
 // What to do once a session is on an issue. Said once per issue.
 function startedOn(st) {
-  return `outerpale-devops: this session is on ${st.ref}. Run the start-issue skill: it moves ${st.ref} to In Progress, posts this session's link on it, ` +
+  return `outerpale-devops: this session is on ${st.ref}. Run the build-issue skill: it moves ${st.ref} to In Progress, posts this session's link on it, ` +
     `and finds its GSD phase (linked from the issue; its plan is the phase's PLAN.md in .planning/). Before opening its one PR (titled "${st.ref}: …"), run the outerpale-startup:intent-reviewer agent on the diff.`;
 }
 function scoped(st) {
@@ -45,26 +45,10 @@ function setScope(st, s) {
   return said;
 }
 
-const QUESTION = 'outerpale-devops: before doing any work, make your first tool call one AskUserQuestion asking which Linear issue, project or initiative this session is for. ' +
-  'If it is quick, look up likely open issues and projects with the Linear connector first. Put your recommendation first, and label the options exactly ' +
-  '"Issue OUT-123: <title>", "Project: <name>", "Initiative: <name>" and "None" (not Outer-Pale work, or no Linear scope). Do no other work until they answer.';
-
-// The person's answer to the scope question; changes st and returns what to tell Claude.
-function applyAnswer(st, input, cfg) {
-  if (!input || !C.awaitingScope(st)) return null;
-  const qs = (input.tool_input && input.tool_input.questions) || [];
-  if (!qs.some(q => /\b(issue|project|initiative|scope)\b/i.test((q && q.question) || ''))) return null;
-  const s = C.parseScope(C.answersOf(input), cfg.team);
-  return s ? setScope(st, s) || scopeLine(st) : null;
-}
-function fromTranscript(st, input, cfg) {
-  return C.awaitingScope(st) ? applyAnswer(st, C.answerFromTranscript(input.transcript_path, st.askedAt || 0), cfg) : null;
-}
-
 async function sessionStart(input, cfg) {
   const st = C.loadState(input.session_id);
   pointer(input.session_id);
-  if (st.scope === 'none') return null;
+  if (!st.scope || st.scope === 'none') return null;          // unscoped: the build-issue skill sets the scope
   const res = { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: [rules(cfg), scopeLine(st)].filter(Boolean).join(' ') } };
   const want = C.buildTitle(st);
   if (want && input.session_title !== want) res.hookSpecificOutput.sessionTitle = want;
@@ -77,9 +61,7 @@ async function promptSubmit(input, cfg) {
   const prompt = C.promptText(input.prompt);
   const st = C.loadState(sid);
   const ctx = [];
-  const said = fromTranscript(st, input, cfg);
-  if (said) ctx.push(said);
-  if (st.scope === 'none') { C.saveState(sid, st); return ctx.length ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: ctx.join(' ') } } : null; }
+  if (st.scope === 'none') return null;
   if (!prompt) return null;                               // no words of the person's: nothing to act on
   const named = C.parseScope(prompt, cfg.team);
   // A launch prompt (from an orchestrator) opens with its scope: "OUT-123 …", "Project: <name>", "Initiative: <name>".
@@ -94,10 +76,6 @@ async function promptSubmit(input, cfg) {
     if (s) ctx.push(s);
   }
   if (!st.desc) st.desc = C.describe(prompt);
-  if (!st.scope && !st.asked) {
-    st.asked = true; st.askedAt = C.transcriptSize(input.transcript_path);  // answers before this are old
-    ctx.push(QUESTION);
-  }
   C.saveState(sid, st);
   const res = { hookSpecificOutput: { hookEventName: 'UserPromptSubmit' } };
   const want = C.buildTitle(st);
@@ -125,12 +103,10 @@ async function preTool(input, cfg) {
   const guard = W.check(name, cfg);
   if (guard) return deny(guard.reason);
   const st = C.loadState(input.session_id);
-  if (fromTranscript(st, input, cfg)) C.saveState(input.session_id, st);
 
-  // One PR per issue, with the issue ID in its title.
+  // One PR per issue, with the issue ID in its title. An unscoped session has no PR rule.
   const title = prTitle(name, input.tool_input || {});
-  if (title === null || st.scope === 'none') return null;
-  if (C.awaitingScope(st)) return deny('answer the scope question first: which Linear issue, project or initiative is this session for?');
+  if (title === null || !st.scope || st.scope === 'none') return null;
   const ids = title.match(new RegExp(`\\b${cfg.team}-\\d+\\b`, 'g')) || [];
   if (st.scope === 'issue' && !ids.includes(st.ref)) {
     return deny(`this session is on ${st.ref}: one PR per issue, so title it "${st.ref}: …" and put "Fixes ${st.ref}" in the body.${ids.length ? ` ${ids.join(', ')} is another issue: work it in its own session.` : ''}`);
@@ -143,12 +119,6 @@ async function preTool(input, cfg) {
 
 async function postTool(input, cfg) {
   const st = C.loadState(input.session_id);
-  if (input.tool_name === 'AskUserQuestion') {
-    const said = applyAnswer(st, input, cfg);
-    if (!said) return null;
-    C.saveState(input.session_id, st);
-    return { hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: said } };
-  }
   const ws = W.record(input.tool_name, input.tool_response);
   if (ws) {
     const ok = ws.workspaceId === cfg.workspaceId;
