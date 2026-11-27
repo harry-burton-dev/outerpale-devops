@@ -50,6 +50,8 @@ test('session start states the contract and the workspace in a scoped session, a
   assert.match(c, /one Linear issue, project or initiative/);
   assert.match(c, /one PR per issue/i);
   assert.match(c, /Outer-Pale workspace \(team OUT\) only/);
+  assert.match(c, /\.planning\//);
+  assert.doesNotMatch(c, /EGM|docs\/design/);
 });
 
 // ---------- scope ----------
@@ -60,7 +62,8 @@ test('a prompt that opens with an issue ID puts the session on that issue', () =
   assert.equal(s.state().ref, 'OUT-401');
   assert.equal(hso(r).sessionTitle, 'OUT-401 · rebuild the nav rail');
   assert.match(ctx(r), /build-issue/);
-  assert.match(ctx(r), /implementation plan/);
+  assert.match(ctx(r), /GSD phase/);
+  assert.match(ctx(r), /PLAN\.md/);
   assert.match(ctx(r), /intent-reviewer/);
 });
 

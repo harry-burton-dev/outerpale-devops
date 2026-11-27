@@ -1,9 +1,13 @@
 # Changelog
 
-## 0.7.0
+## 0.8.0
 
 - **No scope question at session start.** A session starts unscoped and the plugin stands aside, as with "None". The scope is set by the `build-issue` skill, by a prompt that opens with an issue ID, or by a launch prompt that names a project or initiative. An unscoped session's PRs aren't checked. The answer parsing (`AskUserQuestion` PostToolUse and the transcript reader) is gone with the question.
 - **`start-issue` is now `build-issue`.** It asks which issue, on its own, when none is named.
+
+## 0.7.0
+
+- **GSD instead of EGM.** One Linear issue is one GSD phase. The issue holds the goal and acceptance criteria; the plan is the phase's `PLAN.md` in `.planning/`, which is committed. `start-issue` finds or adds the issue's phase, `break-down` turns the GSD roadmap into one issue per phase, `close-project` uses GSD's milestone audit, and `sweep` checks issues against phases.
 
 ## 0.6.0
 

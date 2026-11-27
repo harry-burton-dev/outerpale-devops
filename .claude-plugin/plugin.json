@@ -1,7 +1,7 @@
 {
   "name": "outerpale-devops",
-  "version": "0.7.0",
-  "description": "Outer-Pale project management: each session works on one Linear issue, project or initiative (or none), one PR per issue with its ID in the title, implementation plans in issue descriptions and Linear writes to the Outer-Pale workspace only.",
+  "version": "0.8.0",
+  "description": "Outer-Pale project management: each session works on one Linear issue, project or initiative (or none), one PR per issue with its ID in the title, one Linear issue per GSD phase, and Linear writes to the Outer-Pale workspace only.",
   "author": {
     "name": "Harry"
   },

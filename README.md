@@ -6,8 +6,8 @@ A Claude Code plugin for Outer-Pale project management in Linear. Each session w
 
 | Session | Works on | Produces |
 |---|---|---|
-| Design | A project or initiative, through its "Design: …" issue | A design doc in `docs/design/`, linked from the project (EGM's working files in `.work/egm/`) |
-| Review and breakdown | A project | The project's issues, each with its implementation plan in the description (`break-down` skill) |
+| Design | A project or initiative, through its "Design: …" issue | GSD's roadmap and phases in `.planning/` (committed), through its discuss and plan steps |
+| Review and breakdown | A project | One Linear issue per GSD phase, with goal, acceptance criteria and a link to the phase (`break-down` skill) |
 | Build | One issue | One PR, titled `OUT-123: …` with `Fixes OUT-123` in the body |
 | Other | None | Anything; the plugin stands aside |
 
@@ -27,7 +27,7 @@ Nothing is written into the project's repository. Session state lives in `~/.lin
 
 ## Skills
 
-`build-issue` (put the session on an issue, asking which if none is named, move it to In Progress, read its plan, open its one PR), `break-down` (design doc → issues with plans), `close-issue` (summary or handoff comment), `close-project` (all issues done, design checked, project Completed), `sweep` (report what's out of line in Linear).
+`build-issue` (put the session on an issue, asking which if none is named, move it to In Progress, find its GSD phase and plan), `break-down` (GSD roadmap → one Linear issue per phase), `close-issue` (summary or handoff comment), `close-project` (all issues done, design checked, project Completed), `sweep` (report what's out of line in Linear).
 
 ## Install
 
