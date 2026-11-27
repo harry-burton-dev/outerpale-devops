@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- **No Linear workspace guard.** New sessions no longer have their Linear writes refused until `get_workspace` is called. Cloud VMs start fresh every session, so the guard's record of checked connectors never carried over, and the first write of every session was blocked. Removed: `lib/workspace.js`, the PreToolUse hook on Linear write tools, the PostToolUse hook on `get_workspace`, and the fail-closed path. Every hook now fails open on an error. The PR gate keeps its own `create_pull_request` matcher.
+
 ## 0.8.0
 
 - **No scope question at session start.** A session starts unscoped and the plugin stands aside, as with "None". The scope is set by the `build-issue` skill, by a prompt that opens with an issue ID, or by a launch prompt that names a project or initiative. An unscoped session's PRs aren't checked. The answer parsing (`AskUserQuestion` PostToolUse and the transcript reader) is gone with the question.

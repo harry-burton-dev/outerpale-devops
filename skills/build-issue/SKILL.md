@@ -4,7 +4,7 @@ description: Build one Linear issue in this session - ask which issue if none is
 allowed-tools: Bash(node:*)
 ---
 
-A session works on one issue and opens one PR for it. One Linear issue is one GSD phase. Linear here is the Outer-Pale workspace (team `OUT`) only. If the plugin refuses a Linear write because the connector is unchecked, call that connector's `get_workspace` and retry.
+A session works on one issue and opens one PR for it. One Linear issue is one GSD phase. Linear here is the Outer-Pale workspace (team `OUT`).
 
 0. If the invocation or the prompt doesn't name the issue, ask in one AskUserQuestion call on its own: which Linear issue is this for? Look up likely open issues with the Linear connector first, put your recommendation first, and label the options "Issue OUT-123: <title>".
 1. Find the issue with the Linear connector. If it doesn't exist, check for a matching one first, then create it (`save_issue`) in the right project with a short task title, its goal and its acceptance criteria. Design work is an issue too: "Design: <topic>" in its project.
