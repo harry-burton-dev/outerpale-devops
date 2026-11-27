@@ -68,11 +68,28 @@ test('a prompt that opens with an issue ID puts the session on that issue', () =
   assert.equal(hso(r).sessionTitle, 'OUT-401 · rebuild the nav rail');
   assert.match(ctx(r), /start-issue/);
   assert.match(ctx(r), /implementation plan/);
+  assert.match(ctx(r), /intent-reviewer/);
 });
 
 test('a passing mention of an issue does not set the scope', () => {
   for (const p of ['this depends on OUT-82', 'PR OUT-82 broke CI', 'see OUT-82 for context']) assert.equal(C.parseScope(p, 'OUT'), null, p);
   for (const p of ['OUT-82 build it', 'switch to OUT-82', 'work on OUT-82', 'pick up OUT-82', 'Issue OUT-82: Nav rail']) assert.deepEqual(C.parseScope(p, 'OUT'), { scope: 'issue', ref: 'OUT-82' }, p);
+});
+
+test('a launch prompt whose first line names a project or initiative sets the scope, so an orchestrated session is not asked', () => {
+  const s = session();
+  const r = s.run('prompt-submit', { prompt: 'Project: Webhooks\nBreak the approved design into issues.' });
+  assert.equal(s.state().scope, 'project');
+  assert.equal(s.state().ref, 'Webhooks');
+  assert.doesNotMatch(ctx(r), /AskUserQuestion/);
+  const t = session();
+  t.run('prompt-submit', { prompt: 'Initiative: Platform v2\nDraft the roadmap.' });
+  assert.equal(t.state().scope, 'initiative');
+  assert.equal(t.state().ref, 'Platform v2');
+  const u = session();
+  u.run('prompt-submit', { prompt: 'OUT-401 rebuild the nav rail' });
+  u.run('prompt-submit', { prompt: 'Project: Webhooks\nsomething else' });
+  assert.equal(u.state().ref, 'OUT-401', 'a later prompt does not move a scoped session to a project');
 });
 
 test('an unscoped session is asked the scope question once, on the first human prompt', () => {
