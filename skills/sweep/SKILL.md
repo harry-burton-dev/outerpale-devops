@@ -1,18 +1,14 @@
 ---
 name: sweep
-description: Check this Claude project against its Linear links and naming schema, and report what's out of line. Use on a schedule or when Harry asks for a tidy-up check.
-allowed-tools: Bash(node:*)
+description: Check Outer-Pale's Linear projects and issues against the workflow, and report what's out of line. Use on a schedule or when Harry asks for a tidy-up check.
 ---
 
-Report only. Change nothing without Harry's say-so.
+Report only. Change nothing without Harry's say-so. With the Linear connector, flag:
 
-1. Run `node <base>/../../scripts/ll.js sweep --json` with this skill's base directory. It finds:
-   - documents outside `masters/` and the epic folders
-   - closed epics that aren't archived
-   - epics with no Linear link
-   - artifact titles that break the schema
-   - threads still unfiled
-2. With the artifact tool's list action, list recent artifacts. Flag any whose title doesn't match `MASTER · …` or `EPIC · ISSUE · …`, and any epic-coded artifact missing from its epic's `index.md`.
-3. With the Linear connector, for each open epic's issues that are In Progress, flag any with no "Thread started" comment, and any with no comment in 48 hours (a missing handoff note).
-4. Flag Linear projects that are Completed while their folder is still open.
-5. Post the findings as one short list. If there are none, say "Sweep: nothing found."
+1. Issues In Progress with no linked PR and no comment in 48 hours (a missing handoff note).
+2. Issues in a project's backlog with no implementation plan in their description.
+3. Projects with a design issue that is Done but no design doc linked on the project.
+4. Projects whose issues are all Done or Canceled but which aren't Completed.
+5. PRs linked to more than one issue, or issues with more than one open PR.
+
+Post the findings as one short list. If there are none, say "Sweep: nothing found."

@@ -1,7 +1,7 @@
 {
   "name": "outerpale-devops",
-  "version": "0.4.2",
-  "description": "Outer-Pale dev-ops: ties Claude threads, files and artifacts to Linear epics and issues in the Outer-Pale workspace only, asks up front whether a thread needs an epic or is Outer-Pale work at all, and sends sessions to Langfuse. Successor to endstate-ops.",
+  "version": "0.5.0",
+  "description": "Outer-Pale project management: each session works on one Linear issue, project or initiative (or none), one PR per issue with its ID in the title, implementation plans in issue descriptions, Linear writes to the Outer-Pale workspace only, and Langfuse session traces.",
   "author": {
     "name": "Harry"
   },
@@ -23,24 +23,6 @@
       "title": "Linear workspace name",
       "description": "Shown in messages.",
       "default": "Outer-Pale"
-    },
-    "policy": {
-      "type": "string",
-      "title": "Unfiled policy",
-      "description": "Every unfiled thread is first asked whether it needs an epic and whether it is Outer-Pale work at all. block-outputs (default): until it is answered, the thread can talk but its writes and artifacts wait; after \"no epic\", documents go in unfiled/. unfiled: warn instead of refusing. block: refuse prompts until an epic is named, or you say \"no epic\" or \"not Outer-Pale\".",
-      "default": "block-outputs"
-    },
-    "allow_docs": {
-      "type": "string",
-      "title": "Documents allowed outside the tree",
-      "description": "Comma-separated globs for .md/.html files that may live outside masters/, epics/ and unfiled/ (shipped guides, READMEs).",
-      "default": "**/README.md,**/CLAUDE.md,**/AGENTS.md,**/CHANGELOG.md,docs/**,.claude/**,.linear-link/**"
-    },
-    "root": {
-      "type": "string",
-      "title": "Folder for masters/ and epics/ (optional)",
-      "description": "Where the tree and thread state live. Empty: the nearest folder at or above the session's folder that holds epics/ or masters/ (the project's git repo); else the Claude project's shared folder (/mnt/project-files) when there is one; else the session's project folder.",
-      "default": ""
     },
     "linear_api_key": {
       "type": "string",

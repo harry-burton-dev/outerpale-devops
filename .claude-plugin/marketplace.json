@@ -7,7 +7,7 @@
     {
       "name": "outerpale-devops",
       "source": "./",
-      "description": "Outer-Pale dev-ops: Linear epics and issues in the Outer-Pale workspace only, an up-front epic question, a \"no epic\" mode, and Langfuse session traces."
+      "description": "Outer-Pale project management: one Linear issue, project or initiative per session, one PR per issue, Linear writes to Outer-Pale only, and Langfuse traces."
     }
   ]
 }
