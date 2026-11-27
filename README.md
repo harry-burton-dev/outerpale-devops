@@ -17,8 +17,8 @@ Linear's GitHub integration links each PR to its issue from the ID and moves the
 
 | Thing | Rule | Enforced by |
 | --- | --- | --- |
-| Scope question | On the first prompt of an unscoped session, Claude asks one question: which issue, project or initiative, or "None". A prompt that opens with an issue ID (`OUT-401 …`, "switch to OUT-402") answers it. The answer is also read from the transcript, since the desktop app doesn't run PostToolUse for `AskUserQuestion` | UserPromptSubmit, PreToolUse, PostToolUse |
-| One PR per issue | An issue session's PR must carry its own issue ID in the title. A project or initiative session's PR must carry some issue's ID, such as its design issue's. No PR before the scope question is answered. Covers the GitHub connector's `create_pull_request` and `gh pr create` | PreToolUse |
+| Scope | A session starts unscoped, and the plugin stands aside. The `build-issue` skill sets the scope (asking which issue if none is named), as does a prompt that opens with an issue ID (`OUT-401 …`, "switch to OUT-402") or a launch prompt whose first line is `Project: <name>` or `Initiative: <name>`. `break-down` sets its project | UserPromptSubmit, `scripts/ll.js` |
+| One PR per issue | An issue session's PR must carry its own issue ID in the title. A project or initiative session's PR must carry some issue's ID, such as its design issue's. An unscoped session has no PR rule. Covers the GitHub connector's `create_pull_request` and `gh pr create` | PreToolUse |
 | Linear workspace | Writes only to Outer-Pale, whatever the scope, including "None". Fails closed if the hook errors | PreToolUse on Linear write tools, PostToolUse on `get_workspace` |
 | Session title | `OUT-123 · description`, or `<project> · description`; untouched when unscoped or "None" | SessionStart and UserPromptSubmit set `sessionTitle` |
 | Artifact ↔ issue | An artifact published in an issue session is attached to the issue (directly with a Linear key, otherwise via Claude) | PostToolUse on Artifact |
@@ -27,7 +27,7 @@ Nothing is written into the project's repository. Session state lives in `~/.lin
 
 ## Skills
 
-`start-issue` (put the session on an issue, move it to In Progress, read its plan), `break-down` (design doc → issues with plans), `close-issue` (summary or handoff comment), `close-project` (all issues done, design checked, project Completed), `sweep` (report what's out of line in Linear).
+`build-issue` (put the session on an issue, asking which if none is named, move it to In Progress, read its plan, open its one PR), `break-down` (design doc → issues with plans), `close-issue` (summary or handoff comment), `close-project` (all issues done, design checked, project Completed), `sweep` (report what's out of line in Linear).
 
 ## Install
 
@@ -50,4 +50,4 @@ Don't run it alongside endstate-ops or linear-link: they would all answer the sa
 node --test tests/
 ```
 
-`tests/contract.test.js` covers the scope question, one PR per issue and the workspace guard.
+`tests/contract.test.js` covers the scope, one PR per issue and the workspace guard.

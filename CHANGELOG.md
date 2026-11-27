@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- **No scope question at session start.** A session starts unscoped and the plugin stands aside, as with "None". The scope is set by the `build-issue` skill, by a prompt that opens with an issue ID, or by a launch prompt that names a project or initiative. An unscoped session's PRs aren't checked. The answer parsing (`AskUserQuestion` PostToolUse and the transcript reader) is gone with the question.
+- **`start-issue` is now `build-issue`.** It asks which issue, on its own, when none is named.
+
 ## 0.6.0
 
 - **No telemetry of its own.** The Langfuse sender (the Stop hook, `lib/telemetry.js`, the session event log and the `langfuse_*` and `telemetry_content` options) is gone. Claude Code's own OpenTelemetry export sends session traces instead.

@@ -1,11 +1,12 @@
 ---
-name: start-issue
-description: Put this session on one Linear issue - find or create it, move it to In Progress, post this session's link, and read its implementation plan. Use at the start of any build or design work, and whenever the session moves to a different issue.
+name: build-issue
+description: Build one Linear issue in this session - ask which issue if none is named, find or create it, move it to In Progress, post this session's link, read its implementation plan, and open its one PR. Use at the start of any build or design work on an issue, and whenever the session moves to a different issue.
 allowed-tools: Bash(node:*)
 ---
 
 A session works on one issue and opens one PR for it. Linear here is the Outer-Pale workspace (team `OUT`) only. If the plugin refuses a Linear write because the connector is unchecked, call that connector's `get_workspace` and retry.
 
+0. If the invocation or the prompt doesn't name the issue, ask in one AskUserQuestion call on its own: which Linear issue is this for? Look up likely open issues with the Linear connector first, put your recommendation first, and label the options "Issue OUT-123: <title>".
 1. Find the issue with the Linear connector. If it doesn't exist, check for a matching one first, then create it (`save_issue`) in the right project with a short task title. Design work is an issue too: "Design: <topic>" in its project.
 2. Run, with this skill's base directory: `node <base>/../../scripts/ll.js scope issue <ISSUE> --title "<issue title>"`.
 3. Move the issue to In Progress, and post one comment: `Session started: <session title> <this session's link>`. Skip the comment if this session already posted one on it.

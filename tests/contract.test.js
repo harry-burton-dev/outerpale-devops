@@ -36,17 +36,15 @@ function session() {
   const state = () => JSON.parse(fs.readFileSync(path.join(home, '.linear-link', 'sessions', 's.json'), 'utf8'));
   return { home, repo, run, ll, state };
 }
-const ask = (s, answer) => s.run('post-tool', {
-  tool_name: 'AskUserQuestion',
-  tool_input: { questions: [{ question: 'Which Linear issue, project or initiative is this session for?' }], answers: { 'Which Linear issue, project or initiative is this session for?': answer } },
-});
 const pr = (s, title, extra = {}) => s.run('pre-tool', { tool_name: 'mcp__github__create_pull_request', tool_input: { title, head: 'b', base: 'main', ...extra } });
 const ghpr = (s, command) => s.run('pre-tool', { tool_name: 'Bash', tool_input: { command } });
 const denied = r => hso(r).permissionDecision === 'deny';
 
 // ---------- the contract, said at the start ----------
-test('session start states the contract and the workspace', () => {
+test('session start states the contract and the workspace in a scoped session, and nothing in an unscoped one', () => {
   const s = session();
+  assert.equal(s.run('session-start', {}), null, 'an unscoped session hears nothing');
+  s.ll('scope', 'issue', 'OUT-7');
   const c = ctx(s.run('session-start', {}));
   assert.match(c, /^outerpale-devops: /);
   assert.match(c, /one Linear issue, project or initiative/);
@@ -61,7 +59,7 @@ test('a prompt that opens with an issue ID puts the session on that issue', () =
   assert.equal(s.state().scope, 'issue');
   assert.equal(s.state().ref, 'OUT-401');
   assert.equal(hso(r).sessionTitle, 'OUT-401 · rebuild the nav rail');
-  assert.match(ctx(r), /start-issue/);
+  assert.match(ctx(r), /build-issue/);
   assert.match(ctx(r), /implementation plan/);
   assert.match(ctx(r), /intent-reviewer/);
 });
@@ -87,14 +85,12 @@ test('a launch prompt whose first line names a project or initiative sets the sc
   assert.equal(u.state().ref, 'OUT-401', 'a later prompt does not move a scoped session to a project');
 });
 
-test('an unscoped session is asked the scope question once, on the first human prompt', () => {
+test('an unscoped session is not asked the scope question: the plugin stands aside', () => {
   const s = session();
-  const r = s.run('prompt-submit', { prompt: 'tidy the header spacing' });
-  assert.match(ctx(r), /AskUserQuestion/);
-  assert.match(ctx(r), /"Project: <name>"/);
-  assert.match(ctx(r), /"None"/);
-  assert.equal(hso(r).sessionTitle, undefined, 'an unscoped session keeps the app title');
-  assert.doesNotMatch(ctx(s.run('prompt-submit', { prompt: 'and the footer' })), /AskUserQuestion/);
+  assert.equal(ctx(s.run('prompt-submit', { prompt: 'tidy the header spacing' })), '');
+  assert.equal(ctx(s.run('prompt-submit', { prompt: 'and the footer' })), '');
+  assert.equal(s.state().scope, null);
+  assert.ok(!denied(pr(s, 'Tidy the header')), 'no issue needed for a PR');
 });
 
 test('a subagent report is not the person: it sets nothing and asks nothing', () => {
@@ -103,38 +99,21 @@ test('a subagent report is not the person: it sets nothing and asks nothing', ()
   assert.equal(r, null);
 });
 
-test('answers set the scope: issue, project, initiative', () => {
-  const a = session(); a.run('prompt-submit', { prompt: 'tidy the header' });
-  assert.match(ctx(ask(a, 'Issue OUT-12: Header spacing')), /OUT-12/);
-  assert.equal(a.state().scope, 'issue'); assert.equal(a.state().ref, 'OUT-12');
-
-  const b = session(); b.run('prompt-submit', { prompt: 'design the webhooks work' });
-  assert.match(ctx(ask(b, 'Project: Webhooks')), /project Webhooks/);
-  assert.equal(b.state().scope, 'project'); assert.equal(b.state().ref, 'Webhooks');
-  assert.equal(hso(b.run('prompt-submit', { prompt: 'start with the retry rules' })).sessionTitle, 'Webhooks · design the webhooks work');
-
-  const c = session(); c.run('prompt-submit', { prompt: 'plan next quarter' });
-  ask(c, 'Initiative: Platform v2');
-  assert.equal(c.state().scope, 'initiative'); assert.equal(c.state().ref, 'Platform v2');
-});
-
-test('answering "None" stands the plugin aside, but the Linear guard still holds', () => {
-  const s = session(); s.run('prompt-submit', { prompt: 'set up my dotfiles' });
-  assert.match(ctx(ask(s, 'None')), /stands aside/);
+test('"ll scope none" stands the plugin aside, but the Linear guard still holds', () => {
+  const s = session(); s.ll('scope', 'none');
+  assert.equal(s.run('prompt-submit', { prompt: 'OUT-5 set up my dotfiles' }), null);
   assert.equal(s.state().scope, 'none');
-  assert.equal(s.run('prompt-submit', { prompt: 'and the shell prompt' }), null);
-  assert.ok(!denied(pr(s, 'Tidy dotfiles')), 'no issue needed for a PR');
+  assert.ok(!denied(pr(s, 'Tidy dotfiles')));
   assert.ok(denied(s.run('pre-tool', { tool_name: `${LINEAR}__save_issue`, tool_input: {} })));
 });
 
-test('an answer only in the transcript is read (the desktop app skips PostToolUse for questions)', () => {
-  const s = session();
-  s.run('prompt-submit', { prompt: 'tidy the header spacing' });
-  const q = 'Which Linear issue, project or initiative is this session for?';
-  const f = path.join(tmp(), 't.jsonl');
-  fs.writeFileSync(f, JSON.stringify({ type: 'user', toolUseResult: { questions: [{ question: q }], answers: { [q]: 'Project: Webhooks' } } }) + '\n');
-  s.run('pre-tool', { transcript_path: f, tool_name: 'Read', tool_input: {} });
-  assert.equal(s.state().scope, 'project');
+test('build-issue replaces start-issue, and it asks for the issue and records it', () => {
+  const skills = path.join(__dirname, '..', 'skills');
+  assert.ok(!fs.existsSync(path.join(skills, 'start-issue')));
+  const md = fs.readFileSync(path.join(skills, 'build-issue', 'SKILL.md'), 'utf8');
+  assert.match(md, /^name: build-issue$/m);
+  assert.match(md, /AskUserQuestion/);
+  assert.match(md, /ll\.js scope issue/);
 });
 
 test('the ll CLI sets and shows the scope', () => {
@@ -165,11 +144,6 @@ test('a project or initiative session opens PRs only for an issue (design work h
   assert.ok(denied(bad));
   assert.match(hso(bad).permissionDecisionReason, /Design: /);
   assert.equal(pr(s, 'OUT-9: Webhooks design doc'), null);
-});
-
-test('a PR waits for the scope question to be answered', () => {
-  const s = session(); s.run('prompt-submit', { prompt: 'tidy the header spacing' });
-  assert.match(hso(pr(s, 'OUT-1 tidy')).permissionDecisionReason, /scope question/);
 });
 
 test('state lives in ~/.linear-link, never in the repository', () => {
@@ -225,11 +199,11 @@ test('guard: a hook error refuses Linear writes and names the error, and lets ev
   assert.equal(raw('{"tool_name":"Read","tool_input":'), '');
 });
 
-test('hooks.json covers the guard, the PR gate and the answer', () => {
+test('hooks.json covers the guard, the PR gate and artifacts', () => {
   const hooks = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'hooks', 'hooks.json'), 'utf8')).hooks;
   const covers = (ev, name) => hooks[ev].some(h => new RegExp(`^(?:${h.matcher || '.*'})$`).test(name));
   for (const t of [`${LINEAR}__save_issue`, `${LINEAR}__create_attachment`, 'mcp__github__create_pull_request', 'Bash']) assert.ok(covers('PreToolUse', t), t);
-  for (const t of [`${LINEAR}__get_workspace`, 'AskUserQuestion', 'Artifact']) assert.ok(covers('PostToolUse', t), t);
+  for (const t of [`${LINEAR}__get_workspace`, 'Artifact']) assert.ok(covers('PostToolUse', t), t);
 });
 
 // ---------- no telemetry of its own: Claude Code's OpenTelemetry export does that ----------
