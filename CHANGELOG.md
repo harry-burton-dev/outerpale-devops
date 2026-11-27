@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- **No telemetry of its own.** The Langfuse sender (the Stop hook, `lib/telemetry.js`, the session event log and the `langfuse_*` and `telemetry_content` options) is gone. Claude Code's own OpenTelemetry export sends session traces instead.
+
 ## 0.5.1
 
 - **Scope from a launch prompt.** A prompt whose first line is `Project: <name>` or `Initiative: <name>` sets the scope, as a leading issue ID already did, so a session an orchestrator starts isn't asked the scope question. It doesn't move a session that already has a scope.

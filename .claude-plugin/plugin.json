@@ -1,7 +1,7 @@
 {
   "name": "outerpale-devops",
-  "version": "0.5.1",
-  "description": "Outer-Pale project management: each session works on one Linear issue, project or initiative (or none), one PR per issue with its ID in the title, implementation plans in issue descriptions, Linear writes to the Outer-Pale workspace only, and Langfuse session traces.",
+  "version": "0.6.0",
+  "description": "Outer-Pale project management: each session works on one Linear issue, project or initiative (or none), one PR per issue with its ID in the title, implementation plans in issue descriptions and Linear writes to the Outer-Pale workspace only.",
   "author": {
     "name": "Harry"
   },
@@ -30,31 +30,6 @@
       "description": "An Outer-Pale key lets hooks read issue titles and attach artifact links directly. A key for any other workspace is ignored.",
       "sensitive": true,
       "default": ""
-    },
-    "langfuse_host": {
-      "type": "string",
-      "title": "Langfuse URL (optional)",
-      "description": "Where sessions are sent, e.g. https://langfuse.example.com. Empty: LANGFUSE_HOST, else nothing is sent.",
-      "default": ""
-    },
-    "langfuse_public_key": {
-      "type": "string",
-      "title": "Langfuse public key (optional)",
-      "description": "pk-lf-… of the outerpale-devops Langfuse project. Empty: LANGFUSE_PUBLIC_KEY.",
-      "default": ""
-    },
-    "langfuse_secret_key": {
-      "type": "string",
-      "title": "Langfuse secret key (optional)",
-      "description": "sk-lf-… of the outerpale-devops Langfuse project. Empty: LANGFUSE_SECRET_KEY.",
-      "sensitive": true,
-      "default": ""
-    },
-    "telemetry_content": {
-      "type": "string",
-      "title": "What Langfuse receives",
-      "description": "full (default): prompts, replies and tool inputs/outputs. metadata: timings, tokens, tool names and epic/issue tags only.",
-      "default": "full"
     }
   }
 }

@@ -1,6 +1,6 @@
 # outerpale-devops
 
-A Claude Code plugin for Outer-Pale project management in Linear. Each session works on one Linear issue, project or initiative in the **Outer-Pale workspace only**, or on none. Work is one PR per issue, and issues make up a project. It also sends every session to Langfuse. History is in [CHANGELOG.md](CHANGELOG.md).
+A Claude Code plugin for Outer-Pale project management in Linear. Each session works on one Linear issue, project or initiative in the **Outer-Pale workspace only**, or on none. Work is one PR per issue, and issues make up a project. History is in [CHANGELOG.md](CHANGELOG.md).
 
 ## The workflow it holds
 
@@ -22,7 +22,6 @@ Linear's GitHub integration links each PR to its issue from the ID and moves the
 | Linear workspace | Writes only to Outer-Pale, whatever the scope, including "None". Fails closed if the hook errors | PreToolUse on Linear write tools, PostToolUse on `get_workspace` |
 | Session title | `OUT-123 · description`, or `<project> · description`; untouched when unscoped or "None" | SessionStart and UserPromptSubmit set `sessionTitle` |
 | Artifact ↔ issue | An artifact published in an issue session is attached to the issue (directly with a Linear key, otherwise via Claude) | PostToolUse on Artifact |
-| Session telemetry | Turns, tokens, tools and plugin events to Langfuse, tagged with the scope, when configured | Stop |
 
 Nothing is written into the project's repository. Session state lives in `~/.linear-link/sessions/`.
 
@@ -41,7 +40,7 @@ Needs Node 18 or later on the machine that runs the session. From GitHub, in Cla
 
 To get new versions automatically, turn on auto-update for the `outerpale` marketplace in `/plugin` → Marketplaces. A new version is one with a higher `version` in `.claude-plugin/plugin.json`, so bump it with every release. To try a working copy instead: `claude --plugin-dir <path to this repo>`.
 
-Options: team key (default `OUT`), Linear workspace ID and name (default Outer-Pale), an optional Linear API key, Langfuse URL and keys (or `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`), and `telemetry_content` (`full` or `metadata`).
+Options: team key (default `OUT`), Linear workspace ID and name (default Outer-Pale), and an optional Linear API key. Session tracing comes from Claude Code's own OpenTelemetry export, not from this plugin.
 
 Don't run it alongside endstate-ops or linear-link: they would all answer the same hooks.
 
@@ -51,4 +50,4 @@ Don't run it alongside endstate-ops or linear-link: they would all answer the sa
 node --test tests/
 ```
 
-`tests/contract.test.js` covers the scope question, one PR per issue, the workspace guard and Langfuse (against a local fake server).
+`tests/contract.test.js` covers the scope question, one PR per issue and the workspace guard.

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// outerpale-devops hook dispatcher: node run.js <session-start|prompt-submit|pre-tool|post-tool|stop>
+// outerpale-devops hook dispatcher: node run.js <session-start|prompt-submit|pre-tool|post-tool>
 // Reads the hook input as JSON on stdin and prints the hook's JSON output.
 // Any internal error fails open (prints nothing, exits 0), except before a Linear write, which it refuses.
 'use strict';
@@ -8,7 +8,6 @@ const path = require('path');
 const C = require('../lib/core');
 const L = require('../lib/linear');
 const W = require('../lib/workspace');
-const T = require('../lib/telemetry');
 
 function rules(cfg) {
   return `outerpale-devops: each session works on one Linear issue, project or initiative, or on none. ` +
@@ -18,10 +17,6 @@ function rules(cfg) {
     `Linear is the ${cfg.workspaceName} workspace (team ${cfg.team}) only; writes to any other workspace are refused.`;
 }
 const STAND_ASIDE = 'outerpale-devops: this session has no Linear scope, so the plugin stands aside: no title and no PR rule. Linear writes still go to Outer-Pale only.';
-const MAX_EVENTS = 50; // kept until the next Langfuse send; oldest dropped if Langfuse is off
-function note(st, name, extra) {
-  st.events = [...(st.events || []), { name, at: new Date().toISOString(), ...extra }].slice(-MAX_EVENTS);
-}
 function out(obj) { if (obj) process.stdout.write(JSON.stringify(obj)); }
 function pointer(sid) {
   try { fs.mkdirSync(path.dirname(C.pointerFile()), { recursive: true }); fs.writeFileSync(C.pointerFile(), String(sid || '')); } catch {}
@@ -45,7 +40,6 @@ function scoped(st) {
 }
 function setScope(st, s) {
   st.scope = s.scope; st.ref = s.ref;
-  note(st, 'scope-set', { scope: s.scope, ref: s.ref });
   const said = scoped(st);
   if (st.scope === 'issue') { if (st.touched.includes(st.ref)) return null; st.touched.push(st.ref); }
   return said;
@@ -129,16 +123,7 @@ async function preTool(input, cfg) {
   const name = input.tool_name;
   // Linear writes go to the configured workspace only. Checked before any state work, so a failure there can't skip it.
   const guard = W.check(name, cfg);
-  if (guard) {
-    try {
-      const gst = C.loadState(input.session_id);
-      note(gst, guard.event.name, guard.event);
-      C.saveState(input.session_id, gst);
-    } catch (err) {
-      process.stderr.write(`outerpale-devops: couldn't record the Linear refusal: ${err.message}\n`);
-    }
-    return deny(guard.reason);
-  }
+  if (guard) return deny(guard.reason);
   const st = C.loadState(input.session_id);
   if (fromTranscript(st, input, cfg)) C.saveState(input.session_id, st);
 
@@ -185,17 +170,6 @@ async function postTool(input, cfg) {
     : `outerpale-devops: now attach ${url} to ${st.ref} in Linear (create_attachment, title "${title}").` } };
 }
 
-// Stop: send the new turns to Langfuse. Says nothing to Claude.
-async function stop(input, cfg) {
-  const st = C.loadState(input.session_id);
-  try {
-    if (await T.flush(cfg, input, st)) C.saveState(input.session_id, st);
-  } catch (err) {
-    process.stderr.write(`outerpale-devops: Langfuse send failed: ${err.message}\n`);
-  }
-  return null;
-}
-
 async function main(state) {
   const event = process.argv[2];
   state.event = event;
@@ -204,7 +178,7 @@ async function main(state) {
   state.raw = raw;
   const input = raw ? JSON.parse(raw) : {};
   if (!input) return;
-  const fn = { 'session-start': sessionStart, 'prompt-submit': promptSubmit, 'pre-tool': preTool, 'post-tool': postTool, stop }[event];
+  const fn = { 'session-start': sessionStart, 'prompt-submit': promptSubmit, 'pre-tool': preTool, 'post-tool': postTool }[event];
   if (fn) out(await fn(input, C.config()));
 }
 
@@ -222,4 +196,4 @@ if (require.main === module) {
   const state = {};
   main(state).catch(err => onError(state, err, () => process.exit(0)));  // exit once the refusal is written
 }
-module.exports = { sessionStart, promptSubmit, preTool, postTool, stop };
+module.exports = { sessionStart, promptSubmit, preTool, postTool };
