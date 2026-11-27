@@ -1,4 +1,5 @@
 'use strict';
+process.env.OUTERPALE_SHARED_DIRS = ''; // never fall back to a real /mnt/project-files
 // Rules endstate-ops 0.2.0 added on top of linear-link 0.1.2, kept by outerpale-devops.
 // The rules it keeps are proven by plugin.test.js, which is linear-link's suite, unchanged.
 const test = require('node:test');

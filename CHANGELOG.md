@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Tests stay out of the real shared folder.** In a Claude cloud VM `/mnt/project-files` exists, so tests that ran outside a tree fell back to it, wrote session files such as `q2.json` into the project's real `.linear-link/sessions/`, and two of them failed. `OUTERPALE_SHARED_DIRS` (colon-separated, empty for none) now overrides the shared-folder list, and every test file sets it empty. One test still fails when run as root (`guard: a hook error refuses Linear writes`), because `chmod 444` doesn't stop root.
+
 ## 0.4.2
 
 - **Epic from the project's name.** A thread in a Claude project named for an epic (`E03`, or `E03 · Prove the host`) is filed on that epic from its first wake, so it isn't asked the epic question and its writes aren't held. Unattended runs no longer stall waiting for a person. Only an epic in this tree counts. "No epic", "not Outer-Pale" or naming another epic still win, and a thread already waiting on the question is filed by its next wake.

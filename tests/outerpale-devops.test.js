@@ -1,4 +1,5 @@
 'use strict';
+process.env.OUTERPALE_SHARED_DIRS = ''; // never fall back to a real /mnt/project-files
 // What outerpale-devops 0.3.0 adds: Outer-Pale only, a "no epic" mode, and Langfuse.
 const test = require('node:test');
 const assert = require('node:assert');

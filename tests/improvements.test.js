@@ -1,4 +1,5 @@
 'use strict';
+process.env.OUTERPALE_SHARED_DIRS = ''; // never fall back to a real /mnt/project-files
 // 0.4.0: fixes from the usage review of 22 real sessions, and from running 0.3.0.
 const test = require('node:test');
 const assert = require('node:assert');

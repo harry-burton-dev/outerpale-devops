@@ -1,4 +1,5 @@
 'use strict';
+process.env.OUTERPALE_SHARED_DIRS = ''; // never fall back to a real /mnt/project-files
 // Titles come only from the person's own words, and a new thread is asked,
 // before any work, whether it needs an epic and whether it is Outer-Pale work at all.
 const test = require('node:test');

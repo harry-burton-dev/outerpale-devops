@@ -1,4 +1,5 @@
 'use strict';
+process.env.OUTERPALE_SHARED_DIRS = ''; // never fall back to a real /mnt/project-files
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -196,8 +197,11 @@ test('root: an explicit option wins, else the session folder', () => {
     assert.strictEqual(C.projectDir({ cwd: '/x' }), path.resolve('/tmp/ll-explicit'));
     delete process.env.CLAUDE_PLUGIN_OPTION_ROOT; delete process.env.LINEAR_LINK_ROOT;
     process.env.CLAUDE_PROJECT_DIR = '/tmp/ll-proj';
-    const want = fs.existsSync('/mnt/project-files') ? '/mnt/project-files' : '/tmp/ll-proj';
-    assert.strictEqual(C.projectDir({ cwd: '/x' }), want);
+    assert.strictEqual(C.projectDir({ cwd: '/x' }), path.resolve('/tmp/ll-proj'));
+    process.env.OUTERPALE_SHARED_DIRS = '/tmp/ll-shared';
+    fs.mkdirSync('/tmp/ll-shared', { recursive: true });
+    delete require.cache[require.resolve('../lib/core.js')];
+    assert.strictEqual(require('../lib/core.js').projectDir({ cwd: '/x' }), '/tmp/ll-shared');
   } finally { process.env = env; }
 });
 

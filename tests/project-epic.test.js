@@ -1,4 +1,5 @@
 'use strict';
+process.env.OUTERPALE_SHARED_DIRS = ''; // never fall back to a real /mnt/project-files
 // 0.4.2: a thread in a project named for an epic is filed on it, and the tree is found from a folder above the repo.
 const test = require('node:test');
 const assert = require('node:assert');
