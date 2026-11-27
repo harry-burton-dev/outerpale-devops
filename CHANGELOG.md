@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- **Scope from a launch prompt.** A prompt whose first line is `Project: <name>` or `Initiative: <name>` sets the scope, as a leading issue ID already did, so a session an orchestrator starts isn't asked the scope question. It doesn't move a session that already has a scope.
+- **Intent review before the PR.** `start-issue` and the session-start message now say to run the `outerpale-startup:intent-reviewer` agent on the diff before opening the issue's PR.
+
 ## 0.5.0
 
 Rebuilt around project management in Linear, for Claude Code sessions rather than claude.ai Projects.

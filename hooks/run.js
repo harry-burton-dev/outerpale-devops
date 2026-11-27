@@ -35,7 +35,7 @@ function scopeLine(st) {
 // What to do once a session is on an issue. Said once per issue.
 function startedOn(st) {
   return `outerpale-devops: this session is on ${st.ref}. Run the start-issue skill: it moves ${st.ref} to In Progress, posts this session's link on it, ` +
-    `and reads its implementation plan from the description. Open one PR for ${st.ref}, titled "${st.ref}: …".`;
+    `and reads its implementation plan from the description. Before opening its one PR (titled "${st.ref}: …"), run the outerpale-startup:intent-reviewer agent on the diff.`;
 }
 function scoped(st) {
   if (st.scope === 'issue') return startedOn(st);
@@ -88,6 +88,11 @@ async function promptSubmit(input, cfg) {
   if (st.scope === 'none') { C.saveState(sid, st); return ctx.length ? { hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: ctx.join(' ') } } : null; }
   if (!prompt) return null;                               // no words of the person's: nothing to act on
   const named = C.parseScope(prompt, cfg.team);
+  // A launch prompt (from an orchestrator) opens with its scope: "OUT-123 …", "Project: <name>", "Initiative: <name>".
+  if (named && !st.scope && (named.scope === 'project' || named.scope === 'initiative')) {
+    const s = setScope(st, named);
+    if (s) ctx.push(s);
+  }
   if (named && named.scope === 'issue' && named.ref !== st.ref) {
     const li = await L.issueTitle(cfg.linearKey, named.ref, cfg.workspaceId);
     st.desc = (li && li.title) || C.describe(prompt);
