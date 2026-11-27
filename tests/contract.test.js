@@ -6,8 +6,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const http = require('http');
-const { execFileSync, execFile } = require('child_process');
+const { execFileSync } = require('child_process');
 const C = require('../lib/core');
 
 const RUN = path.join(__dirname, '..', 'hooks', 'run.js');
@@ -20,7 +19,7 @@ const hso = r => (r && r.hookSpecificOutput) || {};
 const ctx = r => hso(r).additionalContext || '';
 
 function env(home, extra = {}) {
-  const e = { ...process.env, HOME: home, USERPROFILE: home, LINEAR_API_KEY: '', LANGFUSE_HOST: '', LANGFUSE_PUBLIC_KEY: '', LANGFUSE_SECRET_KEY: '', ...extra };
+  const e = { ...process.env, HOME: home, USERPROFILE: home, LINEAR_API_KEY: '', ...extra };
   for (const k of Object.keys(e)) if (k.startsWith('CLAUDE_PLUGIN_OPTION_') && !(k in extra)) delete e[k];
   delete e.CLAUDE_CODE_SESSION_ID;
   return e;
@@ -33,13 +32,9 @@ function session() {
     const out = execFileSync('node', [RUN, event], { input: JSON.stringify({ session_id: 's', cwd: repo, ...input }), env: env(home, extra) }).toString();
     return out ? JSON.parse(out) : null;
   };
-  const runAsync = (event, input, extra) => new Promise((resolve, reject) => {
-    const p = execFile('node', [RUN, event], { env: env(home, extra) }, (err, stdout, stderr) => (err ? reject(err) : resolve({ stdout, stderr })));
-    p.stdin.end(JSON.stringify({ session_id: 's', cwd: repo, ...input }));
-  });
   const ll = (...args) => execFileSync('node', [LL, ...args, '--session', 's'], { env: env(home) }).toString();
   const state = () => JSON.parse(fs.readFileSync(path.join(home, '.linear-link', 'sessions', 's.json'), 'utf8'));
-  return { home, repo, run, runAsync, ll, state };
+  return { home, repo, run, ll, state };
 }
 const ask = (s, answer) => s.run('post-tool', {
   tool_name: 'AskUserQuestion',
@@ -211,7 +206,6 @@ test('guard: an unchecked connector cannot write; after get_workspace shows Oute
   assert.match(ctx(s.run('post-tool', { tool_name: `${PERSONAL}__get_workspace`, tool_input: {}, tool_response: wsResponse('11111111-2222-4333-8444-555555555555', 'Harry personal', 'harry') })), /will be refused/);
   const r = s.run('pre-tool', { tool_name: `${PERSONAL}__save_comment`, tool_input: {} });
   assert.match(hso(r).permissionDecisionReason, new RegExp(`Use ${LINEAR}__save_comment instead`));
-  assert.ok(s.state().events.some(e => e.name === 'linear-guard-blocked'), 'the refusal is kept for Langfuse');
   for (const t of ['mcp__gmail__delete_draft', `${LINEAR}__list_issues`]) assert.equal(s.run('pre-tool', { tool_name: t, tool_input: {} }), null, t);
 });
 
@@ -238,47 +232,14 @@ test('hooks.json covers the guard, the PR gate and the answer', () => {
   for (const t of [`${LINEAR}__get_workspace`, 'AskUserQuestion', 'Artifact']) assert.ok(covers('PostToolUse', t), t);
 });
 
-// ---------- Langfuse (kept from 0.4) ----------
-function langfuse() {
-  const got = [];
-  const server = http.createServer((req, res) => {
-    let b = '';
-    req.on('data', c => (b += c));
-    req.on('end', () => { got.push({ url: req.url, auth: req.headers.authorization, body: JSON.parse(b) }); res.writeHead(207, { 'content-type': 'application/json' }); res.end('{"successes":[],"errors":[]}'); });
-  });
-  return new Promise(r => server.listen(0, '127.0.0.1', () => r({ server, got, host: `http://127.0.0.1:${server.address().port}` })));
-}
-const T0 = '2026-11-23T10:00:00.000Z';
-const turn1 = [
-  { type: 'user', timestamp: T0, message: { role: 'user', content: 'OUT-401 rebuild the nav rail' } },
-  { type: 'assistant', timestamp: T0, message: { role: 'assistant', model: 'm', usage: { input_tokens: 10, output_tokens: 5 }, content: [{ type: 'tool_use', id: 'tu1', name: 'Read', input: { file_path: 'nav.tsx' } }] } },
-  { type: 'user', timestamp: T0, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'export const Nav' }] } },
-  { type: 'assistant', timestamp: T0, message: { role: 'assistant', model: 'm', usage: { input_tokens: 20, output_tokens: 7 }, content: [{ type: 'text', text: 'Rebuilt.' }] } },
-];
-
-test('langfuse: Stop sends new turns tagged with the scope; no keys or a dead server send nothing and never fail', async () => {
-  const lf = await langfuse();
-  try {
-    const s = session();
-    const keys = { LANGFUSE_HOST: lf.host, LANGFUSE_PUBLIC_KEY: 'pk-lf-test', LANGFUSE_SECRET_KEY: 'sk-lf-test' };
-    s.run('prompt-submit', { prompt: 'OUT-401 rebuild the nav rail' }, keys);
-    const f = path.join(tmp(), 't.jsonl');
-    fs.writeFileSync(f, turn1.map(l => JSON.stringify(l)).join('\n') + '\n');
-    await s.runAsync('stop', { transcript_path: f }, keys);
-    assert.equal(lf.got.length, 1);
-    assert.equal(lf.got[0].auth, 'Basic ' + Buffer.from('pk-lf-test:sk-lf-test').toString('base64'));
-    const trace = lf.got[0].body.batch.find(e => e.type === 'trace-create').body;
-    assert.deepEqual(trace.tags, ['outerpale-devops', 'issue', 'OUT-401']);
-    assert.equal(trace.name, 'OUT-401 · rebuild the nav rail');
-    assert.equal(trace.output, 'Rebuilt.');
-    await s.runAsync('stop', { transcript_path: f }, keys);
-    assert.equal(lf.got.length, 1, 'nothing new, nothing sent');
-
-    const t = session();
-    await t.runAsync('stop', { transcript_path: f }, {});
-    assert.equal(lf.got.length, 1, 'no keys: nothing sent');
-    const r = await t.runAsync('stop', { transcript_path: f }, { LANGFUSE_HOST: 'http://127.0.0.1:1', LANGFUSE_PUBLIC_KEY: 'pk', LANGFUSE_SECRET_KEY: 'sk' });
-    assert.equal(r.stdout, '');
-    assert.match(r.stderr, /Langfuse send failed/);
-  } finally { lf.server.close(); }
+// ---------- no telemetry of its own: Claude Code's OpenTelemetry export does that ----------
+test('the plugin sends no telemetry: no Stop hook, no Langfuse settings, no event log in state', () => {
+  const hooks = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'hooks', 'hooks.json'), 'utf8')).hooks;
+  assert.equal(hooks.Stop, undefined);
+  assert.ok(!fs.existsSync(path.join(__dirname, '..', 'lib', 'telemetry.js')));
+  const manifest = fs.readFileSync(path.join(__dirname, '..', '.claude-plugin', 'plugin.json'), 'utf8');
+  assert.doesNotMatch(manifest, /langfuse|telemetry/i);
+  assert.equal(C.config().langfuse, undefined);
+  const s = session(); s.run('prompt-submit', { prompt: 'OUT-401 rebuild the nav rail' });
+  assert.equal(s.state().events, undefined);
 });

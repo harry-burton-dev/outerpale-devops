@@ -7,7 +7,7 @@
     {
       "name": "outerpale-devops",
       "source": "./",
-      "description": "Outer-Pale project management: one Linear issue, project or initiative per session, one PR per issue, Linear writes to Outer-Pale only, and Langfuse traces."
+      "description": "Outer-Pale project management: one Linear issue, project or initiative per session, one PR per issue and Linear writes to Outer-Pale only."
     }
   ]
 }
